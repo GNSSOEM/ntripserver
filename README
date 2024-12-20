@@ -105,6 +105,7 @@ The user may call the program with the following options:
    -R <maxDelay>        Reconnect mechanism with maximum delay between reconnect
                         attemts in seconds, default: no reconnect activated,
                         optional
+   -L <FlagFile>        "No connect" flag file
    -M <InputMode> Sets the input mode (1 = Serial Port, 2 = IP server,
       3 = File, 4 = SISNeT Data Server, 5 = UDP server, 6 = NTRIP1 Caster,
       7 = NTRIP2 Caster in HTTP mode),
