@@ -1082,11 +1082,11 @@ int main(int argc, char **argv) {
               } else {
                 reconnect_sec_max = 600;
                 output_init = 0;
-              }
-            }
-          }
+              } /* if (!stop) */
+            } /* if (send(socket_tcp, rtpbuf, i, 0) != i) */
+          } /* if (i > (int) sizeof(rtpbuf) - 40 || j < 0) */
         }
-          break;
+        break; /* case UDP */
         case NTRIP1: /*** OutputMode Ntrip Version 1.0 ***/
           fallback = 0;
           nBufferBytes = snprintf(szSendBuffer, sizeof(szSendBuffer),
@@ -1128,7 +1128,7 @@ int main(int argc, char **argv) {
 #endif
           send_receive_loop(socket_tcp, outputmode, NULL, 0, 0, chunkymode);
           input_init = output_init = 0;
-          break;
+          break; /* case NTRIP1 */
         case HTTP: /*** Ntrip-Version 2.0 HTTP/1.1 ***/
           nBufferBytes = snprintf(szSendBuffer, sizeof(szSendBuffer),
               "POST %s/%s HTTP/1.1\r\n"
@@ -1189,7 +1189,7 @@ int main(int argc, char **argv) {
 #endif
           send_receive_loop(socket_tcp, outputmode, NULL, 0, 0, chunkymode);
           input_init = output_init = 0;
-          break;
+          break; /* case HTTP */
         case RTSP: /*** Ntrip-Version 2.0 RTSP / RTP ***/
           if ((socket_udp = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
             perror("ERROR: udp socket");
@@ -1341,24 +1341,24 @@ int main(int argc, char **argv) {
             } else {
               break;
             }
-          }
+          } /* while ((nBufferBytes = recv(socket_tcp, szSendBuffer */
           input_init = output_init = 0;
-          break;
+          break; /* case RTSP */
         case TCPIP:
           fallback = 0;
           send_receive_loop(local_socket_tcp, outputmode, NULL, 0, 0, chunkymode);
           input_init = output_init = 0;
           break;
-      }
-    }
+      } /* switch (outputmode) */
+    } /* while ((input_init) && (output_init)) */
     close_session(casterouthost, mountpoint, session, rtsp_extension, 0);
     if ((reconnect_sec_max || fallback) && !sigint_received)
       reconnect_sec = reconnect(reconnect_sec, reconnect_sec_max);
     else
       inputmode = LAST;
-  }
+  } /* while (inputmode != LAST) */
   return 0;
-}
+} /* int main(int argc, char **argv) */
 
 static void send_receive_loop(sockettype sock, int outmode,
     struct sockaddr *pcasterRTP, socklen_t length, unsigned int rtpssrc,
@@ -1619,7 +1619,7 @@ static void send_receive_loop(sockettype sock, int outmode,
           }
         } else
           nBufferBytes -= s;
-      }
+      } /* while(nBufferBytes) */
       i = recv(socket_tcp, rtpbuf, sizeof(rtpbuf), 0);
       if (i >= 12 && (unsigned char) rtpbuf[0] == (2 << 6)
           && rtpssrc
@@ -1750,7 +1750,7 @@ static void send_receive_loop(sockettype sock, int outmode,
     }
     if (send_recv_success == 3)
       reconnect_sec = 1;
-  }
+  } /* while (1) */
   return;
 }
 
