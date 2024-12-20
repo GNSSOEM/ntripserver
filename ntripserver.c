@@ -153,6 +153,7 @@ static char rtsp_extension[SZ] = "";
 static const char *mountpoint = NULL;
 static int udp_cseq = 1;
 static int udp_tim, udp_seq, udp_init;
+const char *flagpath = "";
 
 /* Forward references */
 static void send_receive_loop(sockettype sock, int outmode,
@@ -293,7 +294,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
   while ((c = getopt(argc, argv,
-      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:B")) != EOF) {
+      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:")) != EOF) {
     switch (c) {
       case 'M': /*** InputMode ***/
         if (!strcmp(optarg, "serial"))
@@ -434,6 +435,9 @@ int main(int argc, char **argv) {
         break;
       case 'N': /* Ntrip-STR, optional for Ntrip Version 2.0 */
         ntrip_str = optarg;
+        break;
+      case 'L': /* *No connect" flag file */
+        flagpath = optarg;
         break;
       case 'h': /* print help screen */
       case '?':
