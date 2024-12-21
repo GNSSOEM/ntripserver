@@ -1,6 +1,8 @@
 #!/usr/bin/make
 # $Id: makefile,v 1.9 2009/02/10 12:20:09 stoecker Exp $
 
+BINDIR = /usr/local/bin
+
 ifdef windir
 CC   = gcc
 OPTS = -Wall -W -DWINDOWSVERSION
@@ -23,3 +25,6 @@ archive:
 
 tgzarchive:
 	tar -cvzf ntripserver.tgz makefile ntripserver.c README startntripserver.sh
+
+install: ntripserver
+	cp ntripserver $(BINDIR)
