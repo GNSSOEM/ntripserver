@@ -656,7 +656,7 @@ int main(int argc, char **argv) {
         caster.sin_family = AF_INET;
         caster.sin_port = htons(inport);
 
-        fprintf(stdout, "%s input: host = %s, port = %d, %s%s%s%s%s\n",
+        printf("%s input: host = %s, port = %d, %s%s%s%s%s\n",
             inputmode == NTRIP1_IN ? "ntrip1" :
             inputmode == NTRIP2_HTTP_IN ? "ntrip2" :
             inputmode == SISNET ? "sisnet" :
@@ -723,7 +723,7 @@ int main(int argc, char **argv) {
           szSendBuffer[nBufferBytes++] = '\r';
           szSendBuffer[nBufferBytes++] = '\n';
   #ifndef NDEBUG
-          fprintf(stdout, "%s\n", szSendBuffer);
+          printf("%s\n", szSendBuffer);
   #endif
           if ((send(gps_socket, szSendBuffer, (size_t) nBufferBytes, 0)) != nBufferBytes) {
             flag_socket_error("WARNING: could not send Source caster request");
@@ -932,7 +932,7 @@ int main(int argc, char **argv) {
       }
 
       /* connect to Destination caster, server or proxy host */
-      fprintf(stdout, "caster|server output: host = %s, port = %d, mountpoint = %s"
+      printf("caster|server output: host = %s, port = %d, mountpoint = %s"
           ", mode = %s\n\n", inet_ntoa(caster.sin_addr), outport, mountpoint,
           currentoutputmode == NTRIP1 ? "ntrip1" :
           currentoutputmode == HTTP   ? "http"   :
@@ -1140,7 +1140,7 @@ int main(int argc, char **argv) {
           }
 #ifndef NDEBUG
           else {
-            fprintf(stdout, "Destination caster response:\n%s\n", szSendBuffer);
+            printf("Destination caster response:\n%s\n", szSendBuffer);
           }
 #endif
           send_receive_loop(socket_tcp, outputmode, NULL, 0, 0, chunkymode);
@@ -1202,7 +1202,7 @@ int main(int argc, char **argv) {
           }
 #ifndef NDEBUG
           else {
-            fprintf(stdout, "Destination caster response:\n%s\n", szSendBuffer);
+            printf("Destination caster response:\n%s\n", szSendBuffer);
           }
 #endif
           send_receive_loop(socket_tcp, outputmode, NULL, 0, 0, chunkymode);
@@ -1309,7 +1309,7 @@ int main(int argc, char **argv) {
             }
 #ifndef NDEBUG
             else {
-              fprintf(stdout, "Destination caster response:\n%s\n", szSendBuffer);
+              printf("Destination caster response:\n%s\n", szSendBuffer);
             }
 #endif
             if ((strstr(szSendBuffer, "RTSP/1.0 200 OK\r\n"))
@@ -1424,7 +1424,7 @@ static void send_receive_loop(sockettype sock, int outmode,
   }
 
   /* data transmission */
-  fprintf(stdout, "transfering data ...\n");
+  printf("transfering data ...\n");
   flag_erase();
   int send_recv_success = 0;
 #ifdef WINDOWSVERSION
@@ -2158,8 +2158,8 @@ static int send_to_caster(char *input, sockettype socket, int input_size) {
   }
 #ifndef NDEBUG
   else {
-    fprintf(stdout, "\nDestination caster request:\n");
-    fprintf(stdout, "%s\n", input);
+    printf("\nDestination caster request:\n");
+    printf("%s\n", input);
   }
 #endif
   return send_error;
@@ -2169,7 +2169,7 @@ static int send_to_caster(char *input, sockettype socket, int input_size) {
  * reconnect                                                        *
  *********************************************************************/
 int reconnect(int rec_sec, int rec_sec_max) {
-  flag_int_error("reconnect in <%d> seconds\n\n", rec_sec);
+  printf("tcp connect pause %d sec\n", rec_sec);
   rec_sec *= 2;
   if (rec_sec > rec_sec_max)
     rec_sec = rec_sec_max;
@@ -2274,7 +2274,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
       } else {
         gps_socket = -1;
 #ifndef NDEBUG
-        fprintf(stdout, "close input device: successful\n");
+        printf("close input device: successful\n");
 #endif
       }
     } else if ((gps_serial != INVALID_HANDLE_VALUE) && (inputmode == SERIAL)) {
@@ -2293,7 +2293,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
       else {
         gps_serial = INVALID_HANDLE_VALUE;
 #ifndef NDEBUG
-        fprintf(stdout, "close input device: successful\n");
+        printf("close input device: successful\n");
 #endif
       }
     } else if ((gps_file != -1) && (inputmode == INFILE)) {
@@ -2303,7 +2303,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
       } else {
         gps_file = -1;
 #ifndef NDEBUG
-        fprintf(stdout, "close input device: successful\n");
+        printf("close input device: successful\n");
 #endif
       }
     }
@@ -2325,7 +2325,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
       size_send_buf = recv(socket_tcp, send_buf, sizeof(send_buf), 0);
       send_buf[size_send_buf] = '\0';
 #ifndef NDEBUG
-      fprintf(stdout, "Destination caster response:\n%s", send_buf);
+      printf("Destination caster response:\n%s", send_buf);
 #endif
     }
     if (closesocket(socket_udp) == -1) {
@@ -2334,7 +2334,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
     } else {
       socket_udp = -1;
 #ifndef NDEBUG
-      fprintf(stdout, "close udp socket: successful\n");
+      printf("close udp socket: successful\n");
 #endif
     }
   }
@@ -2346,7 +2346,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
     } else {
       socket_tcp = -1;
 #ifndef NDEBUG
-      fprintf(stdout, "close tcp socket: successful\n");
+      printf("close tcp socket: successful\n");
 #endif
     }
   }
