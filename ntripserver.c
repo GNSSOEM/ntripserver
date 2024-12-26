@@ -327,7 +327,7 @@ int main(int argc, char **argv) {
         else
           inputmode = atoi(optarg);
         if ((inputmode == 0) || (inputmode >= LAST)) {
-          flag_str_error("ERROR: can't convert <%s> to a valid InputMode", optarg);
+          flag_str_error("ERROR: can't convert \"%s\" to a valid InputMode", optarg);
           usage(-1, argv[0]);
         }
         break;
@@ -345,14 +345,14 @@ int main(int argc, char **argv) {
         else if (!strcmp("2.1", optarg))
           sisnet = 21;
         else {
-          flag_str_error("ERROR: unknown SISNeT version <%s>", optarg);
+          flag_str_error("ERROR: unknown SISNeT version \"%s\"", optarg);
           usage(-2, argv[0]);
         }
         break;
       case 'b': /* serial input baud rate */
         ttybaud = atoi(optarg);
         if (ttybaud <= 1) {
-          flag_str_error("ERROR: can't convert <%s> to valid serial baud rate", optarg);
+          flag_str_error("ERROR: can't convert \"%s\" to valid serial baud rate", optarg);
           usage(1, argv[0]);
         }
         break;
@@ -362,7 +362,7 @@ int main(int argc, char **argv) {
       case 'p': /* Destination caster port */
         casteroutport = atoi(optarg);
         if (casteroutport <= 1 || casteroutport > 65535) {
-          flag_str_error("ERROR: can't convert <%s> to a valid HTTP server port", optarg);
+          flag_str_error("ERROR: can't convert \"%s\" to a valid HTTP server port", optarg);
           usage(1, argv[0]);
         }
         break;
@@ -396,7 +396,7 @@ int main(int argc, char **argv) {
       case 'P': /* Input port */
         casterinport = atoi(optarg);
         if (casterinport <= 1 || casterinport > 65535) {
-          flag_str_error("ERROR: can't convert <%s> to a valid port number", optarg);
+          flag_str_error("ERROR: can't convert \"%s\" to a valid port number", optarg);
           usage(1, argv[0]);
         }
         break;
@@ -433,7 +433,7 @@ int main(int argc, char **argv) {
         else
           outputmode = atoi(optarg);
         if ((outputmode == 0) || (outputmode >= END)) {
-          flag_str_error("ERROR: can't convert <%s> to a valid OutputMode", optarg);
+          flag_str_error("ERROR: can't convert \"%s\" to a valid OutputMode", optarg);
           usage(-1, argv[0]);
         }
         break;
@@ -491,7 +491,7 @@ int main(int argc, char **argv) {
     nBufferBytes += encode(authorization, sizeof(authorization), user,
         password);
     if (nBufferBytes > (int) sizeof(authorization)) {
-      snprintf(msgbuf, sizeof(msgbuf), "ERROR: user ID and/or password too long: %d (%d) user ID: %s password: <%s>",
+      snprintf(msgbuf, sizeof(msgbuf), "ERROR: user ID and/or password too long: %d (%d) user ID: %s password: \"%s\"",
                nBufferBytes, (int) sizeof(authorization), user, password);
       flag_logical_error(msgbuf);
       exit(1);
@@ -610,7 +610,7 @@ int main(int argc, char **argv) {
             }
             fclose(fh);
           } else {
-            flag_str_error("ERROR: can't read init file <%s>", initfile);
+            flag_str_error("ERROR: can't read init file \"%s\"", initfile);
             reconnect_sec_max = 0;
             input_init = 0;
             break;
@@ -641,7 +641,7 @@ int main(int argc, char **argv) {
         }
 
         if (!(he = gethostbyname(inhost))) {
-          flag_str_error("ERROR: Input host <%s> unknown", inhost);
+          flag_str_error("ERROR: Input host \"%s\" unknown", inhost);
           usage(-2, argv[0]);
         }
 
@@ -799,7 +799,7 @@ int main(int argc, char **argv) {
             }
             fclose(fh);
           } else {
-            flag_str_error("ERROR: can't read init file <%s>", initfile);
+            flag_str_error("ERROR: can't read init file \"%s\"", initfile);
             reconnect_sec_max = 0;
             input_init = 0;
             break;
@@ -896,12 +896,12 @@ int main(int argc, char **argv) {
 #endif
 
       if (!(he = gethostbyname(outhost))) {
-        flag_str_error("ERROR: Destination caster, server or proxy host <%s> unknown", outhost);
+        flag_str_error("ERROR: Destination caster, server or proxy host \"%s\" unknown", outhost);
         close_session(casterouthost, mountpoint, session, rtsp_extension, 0);
         usage(-2, argv[0]);
+      } else {
+        printf("Destination caster, server or proxy host \"%s\"\n", outhost);
       }
-      else {
-        flag_str_error("Destination caster, server or proxy host <%s>", outhost);}
 
       /* create socket */
       if ((socket_tcp = socket(AF_INET, (outputmode == UDP ? SOCK_DGRAM : SOCK_STREAM), 0)) == INVALID_SOCKET) {
@@ -1272,7 +1272,7 @@ int main(int argc, char **argv) {
               if (strncmp(szSendBuffer, "RTSP", 4) != 0) {
                 if (strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
                   snprintf(msgbuf, sizeof(msgbuf), 
-                      "       RTSP not implemented at Destination caster <%s>%s%s%s"
+                      "       RTSP not implemented at Destination caster \"%s\"%s%s%s"
                           "ntripserver falls back to Ntrip Version 2.0 in TCP/IP mode", casterouthost,
                       *proxyhost ? " or Proxy <" : "", proxyhost,
                       *proxyhost ? ">" : "");
