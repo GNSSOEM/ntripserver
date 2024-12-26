@@ -515,6 +515,7 @@ int main(int argc, char **argv) {
       exit(0);
     } else {
       strncpy(get_extension, szSendBuffer, (size_t) i);
+      get_extension[SZ-1] = 0;
       strcpy(szSendBuffer, "");
       i = 0;
     }
@@ -533,9 +534,11 @@ int main(int argc, char **argv) {
         exit(0);
       } else {
         strncpy(post_extension, szSendBuffer, (size_t) i);
+        post_extension[SZ-1] = 0;
         strcpy(szSendBuffer, "");
         i = snprintf(szSendBuffer, sizeof(szSendBuffer), ":%d", casteroutport);
         strncpy(rtsp_extension, szSendBuffer, SZ);
+        rtsp_extension[SZ-1] = 0;
         strcpy(szSendBuffer, ""); i = 0;
       }
     }
