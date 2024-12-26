@@ -107,6 +107,12 @@ enum OUTMODE {
   END
 };
 
+enum EXITMODE {
+  CMD_KEY_ERROR = 1,
+  CMD_VALUE_ERROR = 2,
+  IO_ERROR = 3,
+};
+
 #define AGENTSTRING     "NTRIP NtripServerPOSIX"
 #define BUFSZ           10240
 #define SZ              64
@@ -304,7 +310,7 @@ int main(int argc, char **argv) {
   /* get and check program arguments */
   if (argc <= 1) {
     usage(2, argv[0]);
-    exit(1);
+    exit(CMD_KEY_ERROR);
   }
   while ((c = getopt(argc, argv,
       "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:")) != EOF) {
@@ -328,7 +334,7 @@ int main(int argc, char **argv) {
           inputmode = atoi(optarg);
         if ((inputmode == 0) || (inputmode >= LAST)) {
           flag_str_error("ERROR: can't convert \"%s\" to a valid InputMode", optarg);
-          usage(-1, argv[0]);
+          exit(CMD_VALUE_ERROR);
         }
         break;
       case 'i': /* serial input device */
@@ -346,14 +352,14 @@ int main(int argc, char **argv) {
           sisnet = 21;
         else {
           flag_str_error("ERROR: unknown SISNeT version \"%s\"", optarg);
-          usage(-2, argv[0]);
+          exit(CMD_VALUE_ERROR);
         }
         break;
       case 'b': /* serial input baud rate */
         ttybaud = atoi(optarg);
         if (ttybaud <= 1) {
           flag_str_error("ERROR: can't convert \"%s\" to valid serial baud rate", optarg);
-          usage(1, argv[0]);
+          exit(CMD_VALUE_ERROR);
         }
         break;
       case 'a': /* Destination caster address */
@@ -363,7 +369,7 @@ int main(int argc, char **argv) {
         casteroutport = atoi(optarg);
         if (casteroutport <= 1 || casteroutport > 65535) {
           flag_str_error("ERROR: can't convert \"%s\" to a valid HTTP server port", optarg);
-          usage(1, argv[0]);
+          exit(CMD_VALUE_ERROR);
         }
         break;
       case 'm': /* Destination caster mountpoint for stream upload */
@@ -397,7 +403,7 @@ int main(int argc, char **argv) {
         casterinport = atoi(optarg);
         if (casterinport <= 1 || casterinport > 65535) {
           flag_str_error("ERROR: can't convert \"%s\" to a valid port number", optarg);
-          usage(1, argv[0]);
+          exit(CMD_VALUE_ERROR);
         }
         break;
       case 'D': /* Source caster mountpoint for stream input */
@@ -434,7 +440,7 @@ int main(int argc, char **argv) {
           outputmode = atoi(optarg);
         if ((outputmode == 0) || (outputmode >= END)) {
           flag_str_error("ERROR: can't convert \"%s\" to a valid OutputMode", optarg);
-          usage(-1, argv[0]);
+          exit(CMD_VALUE_ERROR);
         }
         break;
       case 'n': /* Destination caster user ID for stream upload to mountpoint */
@@ -451,7 +457,7 @@ int main(int argc, char **argv) {
         usage(0, argv[0]);
         break;
       default:
-        usage(2, argv[0]);
+        usage(CMD_KEY_ERROR, argv[0]);
         break;
     }
   }
@@ -466,7 +472,7 @@ int main(int argc, char **argv) {
       msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, " %s", *argv++);
     }
     flag_logical_error(msgbuf);
-    usage(1, argv[0]); /* never returns */
+    exit(CMD_KEY_ERROR);
   }
 
   if ((reconnect_sec_max > 0) && (reconnect_sec_max < 256)) {
@@ -478,7 +484,7 @@ int main(int argc, char **argv) {
 
   if (!mountpoint && outputmode != TCPIP) {
     flag_logical_error("ERROR: Missing mountpoint argument for stream upload");
-    exit(1);
+    exit(CMD_KEY_ERROR);
   }
   if (outputmode == TCPIP) {
     mountpoint = NULL;
@@ -494,7 +500,7 @@ int main(int argc, char **argv) {
       snprintf(msgbuf, sizeof(msgbuf), "ERROR: user ID and/or password too long: %d (%d) user ID: %s password: \"%s\"",
                nBufferBytes, (int) sizeof(authorization), user, password);
       flag_logical_error(msgbuf);
-      exit(1);
+      exit(CMD_VALUE_ERROR);
     }
   }
 
@@ -512,7 +518,7 @@ int main(int argc, char **argv) {
     if ((i > SZ) || (i < 0)) {
       snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster name/port to long - length = %d (max: %d)\n", i, SZ);
       flag_logical_error(msgbuf);
-      exit(0);
+      exit(CMD_VALUE_ERROR);
     } else {
       strncpy(get_extension, szSendBuffer, (size_t) i);
       get_extension[SZ-1] = 0;
@@ -531,7 +537,7 @@ int main(int argc, char **argv) {
       if ((i > SZ) || (i < 0)) {
         snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster name/port to long - length = %d (max: %d)\n", i, SZ);
         flag_logical_error(msgbuf);
-        exit(0);
+        exit(CMD_VALUE_ERROR);
       } else {
         strncpy(post_extension, szSendBuffer, (size_t) i);
         post_extension[SZ-1] = 0;
@@ -559,7 +565,7 @@ int main(int argc, char **argv) {
       case INFILE: {
         if ((gps_file = open(filepath, O_RDONLY)) < 0) {
           flag_io_error("ERROR: opening input file");
-          exit(1);
+          exit(IO_ERROR);
         }
 #ifndef WINDOWSVERSION
         /* set blocking inputmode in case it was not set
@@ -576,7 +582,7 @@ int main(int argc, char **argv) {
         gps_serial = openserial(ttyport, ttybaud);
 #endif
         if (gps_serial == INVALID_HANDLE_VALUE)
-          exit(1);
+          exit(IO_ERROR);
         printf("serial input: device = %s, speed = %d\n", ttyport, ttybaud);
 
         if (initfile) {
@@ -642,12 +648,12 @@ int main(int argc, char **argv) {
 
         if (!(he = gethostbyname(inhost))) {
           flag_str_error("ERROR: Input host \"%s\" unknown", inhost);
-          usage(-2, argv[0]);
+          exit(IO_ERROR);
         }
 
         if ((gps_socket = socket(AF_INET, inputmode == UDPSOCKET ? SOCK_DGRAM : SOCK_STREAM, 0)) == INVALID_SOCKET) {
           flag_socket_error("ERROR: can't create socket for incoming data stream");
-          exit(1);
+          exit(IO_ERROR);
         }
 
         memset((char*) &caster, 0x00, sizeof(caster));
@@ -880,9 +886,10 @@ int main(int argc, char **argv) {
         }
         break;
       default:
-        usage(-1, argv[0]);
+        flag_int_error("ERROR: unknown input mode %d", inputmode);
+        exit(CMD_VALUE_ERROR);
         break;
-    }
+    }; // switch (inputmode)
 
     /* ----- main part ----- */
     int output_init = 1, fallback = 0;
@@ -898,7 +905,7 @@ int main(int argc, char **argv) {
       if (!(he = gethostbyname(outhost))) {
         flag_str_error("ERROR: Destination caster, server or proxy host \"%s\" unknown", outhost);
         close_session(casterouthost, mountpoint, session, rtsp_extension, 0);
-        usage(-2, argv[0]);
+        exit(IO_ERROR);
       } else {
         printf("Destination caster, server or proxy host \"%s\"\n", outhost);
       }
@@ -1211,7 +1218,7 @@ int main(int argc, char **argv) {
         case RTSP: /*** Ntrip-Version 2.0 RTSP / RTP ***/
           if ((socket_udp = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
             flag_socket_error("ERROR: udp socket");
-            exit(4);
+            exit(IO_ERROR);
           }
           /* fill structure with local address information for UDP */
           memset(&local, 0, sizeof(local));
@@ -2270,7 +2277,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
             || (inputmode == SISNET))) {
       if (closesocket(gps_socket) == -1) {
         flag_socket_error("ERROR: close input device ");
-        exit(0);
+        exit(IO_ERROR);
       } else {
         gps_socket = -1;
 #ifndef NDEBUG
@@ -2281,13 +2288,13 @@ static void close_session(const char *caster_addr, const char *mountpoint,
 #ifndef WINDOWSVERSION
       if (close(gps_serial) == INVALID_HANDLE_VALUE) {
         flag_io_error("ERROR: close input device ");
-        exit(0);
+        exit(IO_ERROR);
       }
 #else
       if(!CloseHandle(gps_serial))
       {
         flag_io_error("ERROR: close input device ");
-        exit(0);
+        exit(IO_ERROR);
       }
 #endif
       else {
@@ -2299,7 +2306,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
     } else if ((gps_file != -1) && (inputmode == INFILE)) {
       if (close(gps_file) == -1) {
         flag_io_error("ERROR: close input device ");
-        exit(0);
+        exit(IO_ERROR);
       } else {
         gps_file = -1;
 #ifndef NDEBUG
@@ -2318,7 +2325,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
               "\r\n", caster_addr, rtsp_ext, mountpoint, udp_cseq++, session);
       if ((size_send_buf >= (int) sizeof(send_buf)) || (size_send_buf < 0)) {
         flag_logical_error("ERROR: Destination caster request to long\n");
-        exit(0);
+        exit(IO_ERROR);
       }
       send_to_caster(send_buf, socket_tcp, size_send_buf);
       strcpy(send_buf, "");
@@ -2330,7 +2337,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
     }
     if (closesocket(socket_udp) == -1) {
       flag_socket_error("ERROR: close udp socket");
-      exit(0);
+      exit(IO_ERROR);
     } else {
       socket_udp = -1;
 #ifndef NDEBUG
@@ -2342,7 +2349,7 @@ static void close_session(const char *caster_addr, const char *mountpoint,
   if (socket_tcp != INVALID_SOCKET) {
     if (closesocket(socket_tcp) == -1) {
       flag_socket_error("ERROR: close tcp socket");
-      exit(0);
+      exit(IO_ERROR);
     } else {
       socket_tcp = -1;
 #ifndef NDEBUG
