@@ -1185,17 +1185,14 @@ int main(int argc, char **argv) {
             for (a = szSendBuffer; *a && *a != '\n' && *a != '\r'; ++a) {
               msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%.1s", isprint(*a) ? a : ".");
             }
+            msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "len=%d", nBufferBytes);
             flag_logical_error(msgbuf);
             /* fallback if necessary */
             if (!strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
               snprintf(msgbuf, sizeof(msgbuf),
-                      "Ntrip Version 2.0 not implemented at Destination caster"
-                      " <%s>%s%s%s\n%s"
-                      "ntripserver falls back to Ntrip Version 1.0",
+                      "NTRIP 2.0 HTTP not implemented at \"%s\"%s%s%s falls back to NTRIP 1.0",
                   casterouthost, *proxyhost ? " or Proxy <" : "", proxyhost,
-                  *proxyhost ? ">" : "",
-                  *proxyhost ?
-                      " or HTTP/1.1 not implemented at Proxy" : "");
+                  *proxyhost ? "> or HTTP/1.1 not implemented at Proxy" : "");
               flag_logical_error(msgbuf);
               close_session(casterouthost, mountpoint, session, rtsp_extension, 1);
               useNTRIP1 = 1;
@@ -1291,14 +1288,10 @@ int main(int argc, char **argv) {
                   break;
                 } else {
                   snprintf(msgbuf, sizeof(msgbuf),
-                      "       Ntrip-Version 2.0 not implemented at Destination caster"
-                          "<%s>%s%s%s\n%s"
-                          "       or RTSP/1.0 not implemented at Destination caster%s"
-                          "ntripserver falls back to Ntrip Version 1.0",
+                      "NTRIP 2.0 RSTP not implemented at \"%s\"%s%s%s %s or RTSP/1.0 not implemented%s falls back to NTRIP 1.0",
                       casterouthost, *proxyhost ? " or Proxy <" : "", proxyhost,
                       *proxyhost ? ">" : "",
-                      *proxyhost ?
-                          " or HTTP/1.1 not implemented at Proxy\n" : "",
+                      *proxyhost ? " or HTTP/1.1 not implemented at Proxy\n" : "",
                       *proxyhost ? " or Proxy" : "");
                   flag_logical_error(msgbuf);
                   close_session(casterouthost, mountpoint, session,
