@@ -246,6 +246,8 @@ int main(int argc, char **argv) {
   const char *password = "";
 
   int outputmode = NTRIP1;
+  int useNTRIP1 = 0; // 0 - нет, 1 - да
+  int currentoutputmode = NTRIP1;
 
   struct sockaddr_in casterRTP;
   struct sockaddr_in local;
@@ -919,15 +921,22 @@ int main(int argc, char **argv) {
       caster.sin_family = AF_INET;
       caster.sin_port = htons(outport);
 
+      /*** setup currentoutputmode ***/
+      currentoutputmode = outputmode;
+      if (useNTRIP1) {
+         useNTRIP1 = 0;
+         currentoutputmode = NTRIP1;
+      }
+
       /* connect to Destination caster, server or proxy host */
       fprintf(stdout, "caster|server output: host = %s, port = %d, mountpoint = %s"
           ", mode = %s\n\n", inet_ntoa(caster.sin_addr), outport, mountpoint,
-          outputmode == NTRIP1 ? "ntrip1" :
-          outputmode == HTTP   ? "http"   :
-          outputmode == UDP    ? "udp"    :
-          outputmode == RTSP   ? "rtsp"   : "tcpip");
+          currentoutputmode == NTRIP1 ? "ntrip1" :
+          currentoutputmode == HTTP   ? "http"   :
+          currentoutputmode == UDP    ? "udp"    :
+          currentoutputmode == RTSP   ? "rtsp"   : "tcpip");
 
-      if (outputmode == TCPIP) {
+      if (currentoutputmode == TCPIP) {
         caster.sin_addr.s_addr = INADDR_ANY;
         // Forcefully attaching socket to the local port
         if (bind(socket_tcp, (struct sockaddr *)&caster, sizeof(caster)) < 0)        {
@@ -961,7 +970,7 @@ int main(int argc, char **argv) {
       }
 
       /*** OutputMode handling ***/
-      switch (outputmode) {
+      switch (currentoutputmode) {
         case UDP: {
           unsigned int session;
           char rtpbuf[1526];
@@ -1179,7 +1188,7 @@ int main(int argc, char **argv) {
                       " or HTTP/1.1 not implemented at Proxy" : "");
               flag_logical_error(msgbuf);
               close_session(casterouthost, mountpoint, session, rtsp_extension, 1);
-              outputmode = NTRIP1;
+              useNTRIP1 = 1;
               break;
             } else if ((strstr(szSendBuffer, "HTTP/1.1 401 Unauthorized"))
                 || (strstr(szSendBuffer, "501 Not Implemented"))) {
@@ -1284,7 +1293,7 @@ int main(int argc, char **argv) {
                   flag_logical_error(msgbuf);
                   close_session(casterouthost, mountpoint, session,
                       rtsp_extension, 1);
-                  outputmode = NTRIP1;
+                  useNTRIP1 = 1;
                   fallback = 1;
                   break;
                 }
