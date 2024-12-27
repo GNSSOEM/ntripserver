@@ -160,6 +160,8 @@ static const char *mountpoint = NULL;
 static int udp_cseq = 1;
 static int udp_tim, udp_seq, udp_init;
 const char *flagpath = "";
+const char *outhost = 0;
+unsigned int outport = 0;
 
 /* Forward references */
 static void send_receive_loop(sockettype sock, int outmode,
@@ -182,6 +184,8 @@ static void handle_alarm(int sig);
 #endif
 
 #define FLAG_MSG_SIZE 1024
+static int errsock(void);
+static char *errorstring(int err);
 static void flag_create(const char *msg);
 static void flag_erase(void);
 static void flag_socket_error(const char *msg);
@@ -242,8 +246,6 @@ int main(int argc, char **argv) {
 
   /*** OUTPUT ***/
   unsigned int casteroutport = NTRIP_PORT;
-  const char *outhost = 0;
-  unsigned int outport = 0;
   char post_extension[SZ] = "";
 
   const char *ntrip_str = "";
@@ -1379,6 +1381,29 @@ int main(int argc, char **argv) {
   return 0;
 } /* int main(int argc, char **argv) */
 
+static ssize_t send_and_msg(int sock, const void *buffer, size_t length, int flags)
+{
+  int err;
+  ssize_t i;
+  char msg[200], recvbuf[8];
+  i = send(sock, buffer, length, flags);
+  if (i < 0) {
+    err = errsock();
+    if (err != EAGAIN) {
+      if (err) {
+         if ((err==EPIPE) && !recv(sock, recvbuf, 1, flags))
+            sprintf(msg,"tcp server send disconnected by %s", outhost);
+         else
+             sprintf(msg,"tcp server send error %d (%s) at %s",err,errorstring(err), outhost);
+      } else
+          sprintf(msg,"tcp server send not all, disconnected by %s", outhost);
+      flag_logical_error(msg);
+    } else
+      i = 0;
+  }; // if (i < 0)
+  return i;
+}
+
 static void send_receive_loop(sockettype sock, int outmode,
     struct sockaddr *pcasterRTP, socklen_t length, unsigned int rtpssrc,
     int chunkymode) {
@@ -1458,15 +1483,17 @@ static void send_receive_loop(sockettype sock, int outmode,
 #endif
     if (!nBufferBytes) {
       if (inputmode == SISNET && sisnet <= 30) {
-        int i;
+        int i, j;
         /* a somewhat higher rate than 1 second to get really each block */
         /* means we need to skip double blocks sometimes */
         struct timeval tv = { 0, 700000 };
         select(0, 0, 0, 0, &tv);
         memcpy(sisnetbackbuffer, buffer, sizeof(sisnetbackbuffer));
         i = (sisnet >= 30 ? 5 : 3);
-        if ((send(gps_socket, "MSG\r\n", i, 0)) != i) {
-          flag_socket_error("WARNING: sending SISNeT data request failed");
+
+        if ((j=send_and_msg(gps_socket, "MSG\r\n", i, 0)) != i) {
+          if (j >= 0)
+             flag_socket_error("WARNING: sending SISNeT data request failed");
           return;
         }
       }
@@ -1593,12 +1620,9 @@ static void send_receive_loop(sockettype sock, int outmode,
     /*****************/
     if ((nBufferBytes) && (outmode == NTRIP1 || outmode == TCPIP)) {
       int i;
-      if ((i = send(sock, buffer, (size_t) nBufferBytes, MSG_DONTWAIT)) != nBufferBytes) {
+      if ((i = send_and_msg(sock, buffer, (size_t) nBufferBytes, MSG_DONTWAIT)) != nBufferBytes) {
         if (i < 0) {
-          if (errno != EAGAIN) {
-            flag_socket_error("WARNING: could not send data to Destination caster or localhost");
-            return;
-          }
+          return;
         } else if (i) {
           memmove(buffer, buffer + i, (size_t) (nBufferBytes - i));
           nBufferBytes -= i;
@@ -1606,7 +1630,7 @@ static void send_receive_loop(sockettype sock, int outmode,
       } else {
         nBufferBytes = 0;
       }
-    }
+    } // if ((nBufferBytes) && (outmode == NTRIP1 || outmode == TCPIP))
     else if ((nBufferBytes) && (outmode == UDP)) {
       int i;
       char rtpbuf[1592];
@@ -1632,11 +1656,9 @@ static void send_receive_loop(sockettype sock, int outmode,
         rtpbuf[11] = (rtpssrc) & 0xFF;
         ++udp_seq;
         memcpy(rtpbuf + 12, buffer, s);
-        if ((i = send(socket_tcp, rtpbuf, (size_t) s + 12, MSG_DONTWAIT)) != s + 12) {
-          if (errno != EAGAIN) {
-            flag_socket_error("WARNING: could not send data to Destination caster");
+        if ((i = send_and_msg(socket_tcp, rtpbuf, (size_t) s + 12, MSG_DONTWAIT)) != s + 12) {
+          if (i < 0)
             return;
-          }
         } else
           nBufferBytes -= s;
       } /* while(nBufferBytes) */
@@ -1662,15 +1684,13 @@ static void send_receive_loop(sockettype sock, int outmode,
     else if ((nBufferBytes) && (outmode == HTTP)) {
       if (!remainChunk) {
         int nChunkBytes = snprintf(szSendBuffer, sizeof(szSendBuffer), "%x\r\n", nBufferBytes);
-        send(sock, szSendBuffer, nChunkBytes, 0);
+        if (send_and_msg(sock, szSendBuffer, nChunkBytes, 0) < 0)
+           return;
         remainChunk = nBufferBytes;
       }
-      int i = send(sock, buffer, (size_t) remainChunk, MSG_DONTWAIT);
+      int i = send_and_msg(sock, buffer, (size_t) remainChunk, MSG_DONTWAIT);
       if (i < 0) {
-        if (errno != EAGAIN) {
-          flag_socket_error("WARNING: could not send data to Destination caster");
-          return;
-        }
+        return;
       } else if (i) {
         memmove(buffer, buffer + i, (size_t) (nBufferBytes - i));
         nBufferBytes -= i;
@@ -1679,8 +1699,10 @@ static void send_receive_loop(sockettype sock, int outmode,
         nBufferBytes = 0;
         remainChunk = 0;
       }
-      if (!remainChunk)
-        send(sock, "\r\n", strlen("\r\n"), 0);
+      if (!remainChunk) {
+        if (send_and_msg(sock, "\r\n", strlen("\r\n"), 0) < 0)
+          return;
+      }
     }
     /*** Ntrip-Version 2.0 RTSP(TCP) / RTP(UDP) ***/
     else if ((nBufferBytes) && (outmode == RTSP)) {
@@ -1746,8 +1768,7 @@ static void send_receive_loop(sockettype sock, int outmode,
         if (i > (int) sizeof(buffer) || i < 0) {
           flag_logical_error("Requested data too long");
           return;
-        } else if (send(socket_tcp, buffer, (size_t) i, 0) != i) {
-          flag_socket_error("send");
+        } else if (send_and_msg(socket_tcp, buffer, (size_t) i, 0) != i) {
           return;
         }
         laststate = ct;
