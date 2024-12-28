@@ -155,6 +155,8 @@ static int sigalarm_received = 0;
 static int sigint_received = 0;
 static int reconnect_sec = 1;
 static const char *casterouthost = NTRIP_CASTER;
+static unsigned int casteroutport = NTRIP_PORT;
+static int currentoutputmode = NTRIP1;
 static char rtsp_extension[SZ] = "";
 static const char *mountpoint = NULL;
 static int udp_cseq = 1;
@@ -245,7 +247,6 @@ int main(int argc, char **argv) {
   int bindmode = 0;
 
   /*** OUTPUT ***/
-  unsigned int casteroutport = NTRIP_PORT;
   char post_extension[SZ] = "";
 
   const char *ntrip_str = "";
@@ -255,7 +256,6 @@ int main(int argc, char **argv) {
 
   int outputmode = NTRIP1;
   int useNTRIP1 = 0; // 0 - нет, 1 - да
-  int currentoutputmode = NTRIP1;
 
   struct sockaddr_in casterRTP;
   struct sockaddr_in local;
@@ -314,6 +314,9 @@ int main(int argc, char **argv) {
     usage(2, argv[0]);
     exit(CMD_KEY_ERROR);
   }
+
+  flag_create("Starting...");
+
   while ((c = getopt(argc, argv,
       "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:")) != EOF) {
     switch (c) {
@@ -510,8 +513,6 @@ int main(int argc, char **argv) {
     flag_logical_error("WARNING: Missing password argument for stream download - are you really sure?");
   }
 
-  flag_create("Starting...");
-
   /*** proxy server handling ***/
   if (*proxyhost) {
     inhost = proxyhost;
@@ -663,16 +664,6 @@ int main(int argc, char **argv) {
           memcpy(&caster.sin_addr, he->h_addr, (size_t)he->h_length);
         caster.sin_family = AF_INET;
         caster.sin_port = htons(inport);
-
-        printf("%s input: host = %s, port = %d, %s%s%s%s%s\n",
-            inputmode == NTRIP1_IN ? "ntrip1" :
-            inputmode == NTRIP2_HTTP_IN ? "ntrip2" :
-            inputmode == SISNET ? "sisnet" :
-            inputmode == TCPSOCKET ? "tcp socket" : "udp socket",
-            bindmode ? "127.0.0.1" : inet_ntoa(caster.sin_addr), inport,
-            stream_name ? "stream = " : "", stream_name ? stream_name : "",
-            initfile ? ", initfile = " : "", initfile ? initfile : "",
-            bindmode ? "binding mode" : "");
 
         if (bindmode) {
           if (bind(gps_socket, (struct sockaddr*) &caster, sizeof(caster))
@@ -886,6 +877,22 @@ int main(int argc, char **argv) {
             }
           } // if (strlen(recvrpwd) > (BUFSZ - 3))
         } //if (recvrid && recvrpwd
+
+        snprintf(msgbuf, sizeof(msgbuf), "%d", proxyport);
+        printf("input %sconnected to %s://%s:%d%s%s%s%s%s%s%s%s%s\n",
+            input_init ? "" : "NOT ",
+            inputmode == NTRIP1_IN ? "ntrip1" :
+            inputmode == NTRIP2_HTTP_IN ? "ntrip2" :
+            inputmode == SISNET ? "sisnet" :
+            inputmode == TCPSOCKET ? "tcpserver" : "udp",
+            //bindmode ? "127.0.0.1" : inet_ntoa(caster.sin_addr),
+            casterinhost, casterinport,
+            stream_name ? "/" : "", stream_name ? stream_name : "",
+            initfile ? ", initfile=" : "", initfile ? initfile : "",
+            bindmode ? ", binding mode" : "",
+            *proxyhost ? ", proxy=" : "", proxyhost,
+            *proxyhost ? ":" : "", *proxyhost ? msgbuf : "");
+
         break;
       default:
         flag_int_error("ERROR: unknown input mode %d", inputmode);
@@ -909,7 +916,7 @@ int main(int argc, char **argv) {
         close_session(casterouthost, mountpoint, session, rtsp_extension, 0);
         exit(IO_ERROR);
       } else {
-        printf("Destination caster, server or proxy host <%s>\n", outhost);
+        //printf("Destination caster, server or proxy host <%s>\n", outhost);
       }
 
       /* create socket */
@@ -939,14 +946,6 @@ int main(int argc, char **argv) {
          useNTRIP1 = 0;
          currentoutputmode = NTRIP1;
       }
-
-      /* connect to Destination caster, server or proxy host */
-      printf("caster|server output: host = %s, port = %d, mountpoint = %s"
-          ", mode = %s\n\n", inet_ntoa(caster.sin_addr), outport, mountpoint,
-          currentoutputmode == NTRIP1 ? "ntrip1" :
-          currentoutputmode == HTTP   ? "http"   :
-          currentoutputmode == UDP    ? "udp"    :
-          currentoutputmode == RTSP   ? "rtsp"   : "tcpip");
 
       if (currentoutputmode == TCPIP) {
         caster.sin_addr.s_addr = INADDR_ANY;
@@ -980,6 +979,10 @@ int main(int argc, char **argv) {
           break;
         }
       } // if (currentoutputmode == TCPIP)
+
+      /* connect to Destination caster, server or proxy host */
+      printf("tcp connected to %s:%d\n",
+            casterouthost, casteroutport);
 
       /*** OutputMode handling ***/
       switch (currentoutputmode) {
@@ -1423,6 +1426,14 @@ static void send_receive_loop(sockettype sock, int outmode,
   int rtptime = 0;
   time_t laststate = time(0);
 
+  printf("ntrip connected to %s://%s:%d/%s\n",
+         currentoutputmode == NTRIP1 ? "ntrip1" :
+         currentoutputmode == HTTP   ? "ntrip2_http"   :
+         currentoutputmode == UDP    ? "ntrip2_udp"    :
+         currentoutputmode == RTSP   ? "ntrip2_rtsp"   : "tcpip",
+         casterouthost, casteroutport, mountpoint);
+  flag_erase();
+
   if (outmode == UDP) {
     rtptime = time(0);
 #ifdef WINDOWSVERSION
@@ -1449,8 +1460,6 @@ static void send_receive_loop(sockettype sock, int outmode,
   }
 
   /* data transmission */
-  printf("transfering data ...\n");
-  flag_erase();
   int send_recv_success = 0;
 #ifdef WINDOWSVERSION
   time_t nodata_begin = 0, nodata_current = 0;
