@@ -766,7 +766,7 @@ int main(int argc, char **argv) {
               if(i < nBufferBytes-l)
                 chunkymode = 1;
               init = 1;
-            }
+            } // if( nBufferBytes > 17 && !strstr(szSendBuffer, "ICY 200 OK")  &&
             else if (strstr(szSendBuffer, "\r\n")) {
               if (!strstr(szSendBuffer, "ICY 200 OK")) {
                 int k;
@@ -782,9 +782,9 @@ int main(int argc, char **argv) {
                 break;
               }
               init = 1;
-            }
-          }
-        }
+            } // if( nBufferBytes > 17 && !strstr(szSendBuffer, "ICY 200 OK")
+          } // while (!init && nBufferBytes < (int) sizeof(szSendBuffer) &&
+        } // if (stream_name)
 
         if (initfile && inputmode != SISNET) {
           char buffer[1024];
@@ -812,8 +812,8 @@ int main(int argc, char **argv) {
             input_init = 0;
             break;
           }
-        }
-      }
+        } // if (initfile && inputmode != SISNET)
+      } // case NTRIP2_HTTP_IN:
         if (inputmode == SISNET) {
           int i, j;
           char buffer[1024];
@@ -846,7 +846,7 @@ int main(int argc, char **argv) {
               break;
             }
           }
-        }
+        } // if (inputmode == SISNET)
         /*** receiver authentication  ***/
         if (recvrid && recvrpwd
             && ((inputmode == TCPSOCKET) || (inputmode == UDPSOCKET))) {
@@ -866,7 +866,7 @@ int main(int argc, char **argv) {
               input_init = 0;
               break;
             }
-          }
+          } // if (strlen(recvrid) > (BUFSZ - 3))
 
           if (strlen(recvrpwd) > (BUFSZ - 3)) {
             flag_logical_error("ERROR: Receiver password too long");
@@ -884,8 +884,8 @@ int main(int argc, char **argv) {
               input_init = 0;
               break;
             }
-          }
-        }
+          } // if (strlen(recvrpwd) > (BUFSZ - 3))
+        } //if (recvrid && recvrpwd
         break;
       default:
         flag_int_error("ERROR: unknown input mode %d", inputmode);
@@ -971,7 +971,7 @@ int main(int argc, char **argv) {
             output_init = 0;
             break;
         }
-      }
+      } // if (currentoutputmode == TCPIP)
       else {
         if (connect(socket_tcp, (struct sockaddr*) &caster, sizeof(caster)) < 0) {
           snprintf(msgbuf, sizeof(msgbuf), "WARNING: can't connect output to %s at port %d",
@@ -979,7 +979,7 @@ int main(int argc, char **argv) {
           flag_logical_error(msgbuf);
           break;
         }
-      }
+      } // if (currentoutputmode == TCPIP)
 
       /*** OutputMode handling ***/
       switch (currentoutputmode) {
