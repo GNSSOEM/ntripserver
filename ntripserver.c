@@ -108,9 +108,11 @@ enum OUTMODE {
 };
 
 enum EXITMODE {
+  SUCCESS = 0,
   CMD_KEY_ERROR = 1,
   CMD_VALUE_ERROR = 2,
   IO_ERROR = 3,
+  NET_ERROR = 4
 };
 
 #define AGENTSTRING     "NTRIP NtripServerPOSIX"
@@ -159,6 +161,7 @@ static unsigned int casteroutport = NTRIP_PORT;
 static int currentoutputmode = NTRIP1;
 static char rtsp_extension[SZ] = "";
 static const char *mountpoint = NULL;
+const char *nrip1Mountpoint = NULL;
 static int udp_cseq = 1;
 static int udp_tim, udp_seq, udp_init;
 const char *flagpath = "";
@@ -186,6 +189,20 @@ static void handle_alarm(int sig);
 #endif
 
 #define FLAG_MSG_SIZE 1024
+#define NTRIPv1_MINRSP 14
+#define MAX_NTRIP_CONNECT_TIME   5000  /* 5 sec    = 5 000 ms */
+#define NTRIPv1_RSP_OK_SVR    "OK\r\n"               /* ntrip response: server OK */
+#define NTRIPv1_RSP_ERROR     "Bad Request"          /* ntrip v1 response: error */
+#define NTRIPv2_RSP_ERROR     "ERROR"                /* ntrip v2 response: error */
+#define NTRIPv1_RSP_NOT_FOUND "Mount Point Invalid"  /* ntrip v1 response: not found */
+#define NTRIPv2_RSP_NOT_FOUND "Not Found"            /* ntrip v2 response: not found */
+#define NTRIPv1_RSP_UNAUTH    "Bad Password"         /* ntrip v1 response: unauthorized */
+#define NTRIPv2_RSP_UNAUTH    "Unauthorized"         /* ntrip v2 response: unauthorized */
+#define NTRIPv1_RSP_USED1      "Mount Point Taken"    /* ntrip v2 response: already used */
+#define NTRIPv2_RSP_USED      "Conflict"             /* ntrip v2 response: already used */
+#define NTRIPv1_RSP_USED2     "Mount Point Taken or Invalid"  /* ntrip v1 response: not found */
+#define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
+
 static uint32_t tickget(void);
 static int errsock(void);
 static char *errorstring(int err);
@@ -927,13 +944,23 @@ int main(int argc, char **argv) {
         break;
       }
 
+      {
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+        if (setsockopt(socket_tcp, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
+          flag_socket_error("ERROR: setsockopt SO_RCVTIMEO");
+          break;
+        }
+      }
+
       if (outputmode == TCPIP) {
         // Forcefully attaching socket to the local port
         int opt = 1;
         if (setsockopt(socket_tcp, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
                                                       &opt, sizeof(opt)))  {
-            flag_socket_error("ERROR: setsockopt");
-            break;
+          flag_socket_error("ERROR: setsockopt SO_REUSEADDR | SO_REUSEPORT");
+          break;
         }
       }
       memset((char*) &caster, 0x00, sizeof(caster));
@@ -982,7 +1009,7 @@ int main(int argc, char **argv) {
       } // if (currentoutputmode == TCPIP)
 
       /* connect to Destination caster, server or proxy host */
-      printf("tcp connected to %s:%d\n",
+      printf("TCP connected to %s:%d\n",
             casterouthost, casteroutport);
 
       /*** OutputMode handling ***/
@@ -1119,10 +1146,11 @@ int main(int argc, char **argv) {
         break; /* case UDP */
         case NTRIP1: /*** OutputMode Ntrip Version 1.0 ***/
           fallback = 0;
+          nrip1Mountpoint = strstr(casterouthost,"onocoy.com") ? user : mountpoint;
           nBufferBytes = snprintf(szSendBuffer, sizeof(szSendBuffer),
-              "SOURCE %s %s/%s\r\n"
-                  "Source-Agent: %s/%s\r\n\r\n", password, post_extension,
-              mountpoint, AGENTSTRING, revisionstr);
+              "SOURCE %s %s\r\nSource-Agent: %s/%s\r\nSTR: \r\n\r\n",
+              password, nrip1Mountpoint,
+              AGENTSTRING, revisionstr);
           if ((nBufferBytes > (int) sizeof(szSendBuffer))
               || (nBufferBytes < 0)) {
             flag_logical_error("ERROR: Destination caster request to long");
@@ -1134,29 +1162,93 @@ int main(int argc, char **argv) {
             output_init = 0;
             break;
           }
+          nBufferBytes = 0;
+          *szSendBuffer = '\0';
+          uint32_t startTick = tickget();
+          *msgbuf = 0;
           /* check Destination caster's response */
-          nBufferBytes = recv(socket_tcp, szSendBuffer, sizeof(szSendBuffer), 0);
-          szSendBuffer[nBufferBytes] = '\0';
-          if (!strstr(szSendBuffer, "OK")) {
-            char *a;
-            msglen = snprintf(msgbuf, sizeof(msgbuf),
-                             "ERROR: Destination caster's or Proxy's reply is not OK: ");
-            for (a = szSendBuffer; *a && *a != '\n' && *a != '\r'; ++a) {
-              msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%.1s", isprint(*a) ? a : ".");
+          while (nBufferBytes < (int) sizeof(szSendBuffer)) {
+            int nread = recv(socket_tcp, &szSendBuffer[nBufferBytes],  sizeof(szSendBuffer) - nBufferBytes, 0);
+            if (nread <= 0) {
+              int err=errsock();
+              if ((err!=EALREADY) && (err!=EINPROGRESS)) {
+                if (err==0)
+                  snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection recv disconnected by %s:%d",
+                           casterouthost, casteroutport);
+                else
+                  snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection recv error %d (%s) at %s:%d",
+                           err, errorstring(err), casterouthost, casteroutport);
+                break;
+              } else {
+                usleep(1000L);
+                continue;
+              }
+            } // if (nread <= 0)
+            nBufferBytes += nread;
+            szSendBuffer[nBufferBytes] = '\0';
+            if ((nBufferBytes>=NTRIPv1_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
+              break;
+            if ((int)(tickget()-startTick)>=MAX_NTRIP_CONNECT_TIME) {
+              if (nBufferBytes)
+                snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection timeout from %s:%d (server answer: %.*s)",
+                         casterouthost, casteroutport, nBufferBytes-2, szSendBuffer);
+              else
+                snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection no answer from %s:%d",
+                         casterouthost, casteroutport);
+              break;
             }
-            flag_logical_error(msgbuf);
-            if ((strstr(szSendBuffer, "ERROR - Bad Password"))
-                || (strstr(szSendBuffer, "400 Bad Request")))
+          } // while (output_init && (nBufferBytes < (int) sizeof(szSendBuffer))
+          if (!*msgbuf) {
+#ifndef NDEBUG
+            printf("Destination caster response: %s\n", szSendBuffer);
+#endif
+            if (strstr(szSendBuffer, NTRIPv1_RSP_OK_SVR)) {
+              //printf("NTRIPv1 server OK for %s:%d/%s\n", casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (nBufferBytes == 0) { /* buffer epmpty */
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server NO ANY response from %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_NOT_FOUND) || strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is INVALID for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
               reconnect_sec_max = 0;
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_UNAUTH) || strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server password is INVALID for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+              reconnect_sec_max = 0;
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED2)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED or INVALID for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED1) || strstr(szSendBuffer, NTRIPv2_RSP_USED) || strstr(szSendBuffer, NTRIPv2_RSP_USED)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR: %.*s for %s:%d/%s",
+                       nBufferBytes-2, szSendBuffer, casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (nBufferBytes >= NTRIP_MAXRSP) { /* buffer overflow */
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server response OVERFLOW from %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else {
+              char *a;
+              msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server reply is NOT OK for %s:%d/%s: ",
+                                casterouthost, casteroutport, nrip1Mountpoint);
+              for (a = szSendBuffer; *a; ++a) {
+                 if (isprint(*a))
+                    msgbuf[msglen++] = *a;
+                 else if ((*a == '\n') || (*a == '\r'))
+                    msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "\\%c", (*a == '\n') ? 'n' : 'r');
+                 else
+                    msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "\\x%02X", *a);
+              }
+              snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "(len=%d)", nBufferBytes);
+            }
+          } // if (!*msgbuf)
+          if (*msgbuf){
+            flag_logical_error(msgbuf);
             output_init = 0;
             break;
-          }
-#ifndef NDEBUG
-          else {
-            printf("Destination caster response:\n%s\n", szSendBuffer);
-          }
-#endif
-          send_receive_loop(socket_tcp, outputmode, NULL, 0, 0, chunkymode);
+          } // if (output_init)
+
+          send_receive_loop(socket_tcp, currentoutputmode, NULL, 0, 0, chunkymode);
           input_init = output_init = 0;
           break; /* case NTRIP1 */
         case HTTP: /*** Ntrip-Version 2.0 HTTP/1.1 ***/
@@ -1382,7 +1474,7 @@ int main(int argc, char **argv) {
     else
       inputmode = LAST;
   } /* while (inputmode != LAST) */
-  return 0;
+  return reconnect_sec_max ? SUCCESS : NET_ERROR;
 } /* int main(int argc, char **argv) */
 
 static ssize_t send_and_msg(int sock, const void *buffer, size_t length, int flags)
@@ -1427,12 +1519,13 @@ static void send_receive_loop(sockettype sock, int outmode,
   int rtptime = 0;
   time_t laststate = time(0);
 
-  printf("ntrip connected to %s://%s:%d/%s\n",
+  const char *actualMountpoint = (currentoutputmode == NTRIP1) ? nrip1Mountpoint : mountpoint;
+  printf("NTRIP connected to %s://%s:%d/%s\n",
          currentoutputmode == NTRIP1 ? "ntrip1" :
          currentoutputmode == HTTP   ? "ntrip2_http"   :
          currentoutputmode == UDP    ? "ntrip2_udp"    :
          currentoutputmode == RTSP   ? "ntrip2_rtsp"   : "tcpip",
-         casterouthost, casteroutport, mountpoint);
+         casterouthost, casteroutport, actualMountpoint);
   flag_erase();
 
   if (outmode == UDP) {
