@@ -186,6 +186,7 @@ static void handle_alarm(int sig);
 #endif
 
 #define FLAG_MSG_SIZE 1024
+static uint32_t tickget(void);
 static int errsock(void);
 static char *errorstring(int err);
 static void flag_create(const char *msg);
@@ -2212,7 +2213,32 @@ int reconnect(int rec_sec, int rec_sec_max) {
   sigalarm_received = 0;
   return rec_sec;
 } /* reconnect */
+/********************************************************************
+ * get current tick in ms                                           *
+ *********************************************************************/
+static uint32_t tickget(void)
+{
+#ifdef WINDOWSVERSION
+    return (uint32_t)timeGetTime();
+#else
+    struct timespec tp={0};
+    struct timeval  tv={0};
 
+#ifdef CLOCK_MONOTONIC_RAW
+    /* linux kernel > 2.6.28 */
+    if (!clock_gettime(CLOCK_MONOTONIC_RAW,&tp)) {
+        return tp.tv_sec*1000u+tp.tv_nsec/1000000u;
+    }
+    else {
+        gettimeofday(&tv,NULL);
+        return tv.tv_sec*1000u+tv.tv_usec/1000u;
+    }
+#else
+    gettimeofday(&tv,NULL);
+    return tv.tv_sec*1000u+tv.tv_usec/1000u;
+#endif
+#endif /* WINDOWSVERSION */
+}
 /********************************************************************
  * flag create and erase                                            *
  *********************************************************************/
