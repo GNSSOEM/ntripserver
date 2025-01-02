@@ -750,8 +750,8 @@ int main(int argc, char **argv) {
           nBufferBytes = 0;
           /* check Source caster's response */
           while (!init && nBufferBytes < (int) sizeof(szSendBuffer) &&
-                 (nBufferBytes += recv(gps_socket, szSendBuffer,  sizeof(szSendBuffer) - nBufferBytes, 0)) > 0) {
-            if( nBufferBytes > 17 && !strstr(szSendBuffer, "ICY 200 OK")  &&  /* case 'proxy & ntrip 1.0 caster' */
+                 (nBufferBytes += recv(gps_socket, szSendBuffer+nBufferBytes,  sizeof(szSendBuffer) - nBufferBytes, 0)) > 0) {
+            if ((nBufferBytes > 17) && !strstr(szSendBuffer, "ICY 200 OK")  &&  /* case 'proxy & ntrip 1.0 caster' */
               (!strncmp(szSendBuffer, "HTTP/1.1 200 OK\r\n", 17) ||
                !strncmp(szSendBuffer, "HTTP/1.0 200 OK\r\n", 17)) ) {
               const char *datacheck   = "Content-Type: gnss/data\r\n";
