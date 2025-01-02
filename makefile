@@ -8,7 +8,7 @@ CC   = gcc
 OPTS = -Wall -W -DWINDOWSVERSION
 LIBS = -lwsock32
 else
-OPTS = -Wall -W
+OPTS = -Wall -W -DCLOCK_MONOTONIC_RAW
 endif
 
 ntripserver: ntripserver.c
