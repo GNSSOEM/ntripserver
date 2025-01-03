@@ -189,7 +189,7 @@ static void handle_alarm(int sig);
 #endif
 
 #define FLAG_MSG_SIZE 1024
-#define NTRIPv1_MINRSP 14
+#define NTRIP_MINRSP 14
 #define MAX_NTRIP_CONNECT_TIME   5000  /* 5 sec    = 5 000 ms */
 #define NTRIPv1_RSP_OK_SVR    "OK\r\n"               /* ntrip response: server OK */
 #define NTRIPv1_RSP_ERROR     "Bad Request"          /* ntrip v1 response: error */
@@ -204,6 +204,7 @@ static void handle_alarm(int sig);
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
 
 static uint32_t tickget(void);
+static int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName);
 static int errsock(void);
 static char *errorstring(int err);
 static void flag_create(const char *msg);
@@ -1162,45 +1163,11 @@ int main(int argc, char **argv) {
             output_init = 0;
             break;
           }
-          nBufferBytes = 0;
-          *szSendBuffer = '\0';
-          uint32_t startTick = tickget();
-          *msgbuf = 0;
           /* check Destination caster's response */
-          while (nBufferBytes < (int) sizeof(szSendBuffer)) {
-            int nread = recv(socket_tcp, &szSendBuffer[nBufferBytes],  sizeof(szSendBuffer) - nBufferBytes, 0);
-            if (nread <= 0) {
-              int err=errsock();
-              if ((err!=EALREADY) && (err!=EINPROGRESS)) {
-                if (err==0)
-                  snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection recv disconnected by %s:%d",
-                           casterouthost, casteroutport);
-                else
-                  snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection recv error %d (%s) at %s:%d",
-                           err, errorstring(err), casterouthost, casteroutport);
-                break;
-              } else {
-                usleep(1000L);
-                continue;
-              }
-            } // if (nread <= 0)
-            nBufferBytes += nread;
-            szSendBuffer[nBufferBytes] = '\0';
-            if ((nBufferBytes>=NTRIPv1_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
-              break;
-            if ((int)(tickget()-startTick)>=MAX_NTRIP_CONNECT_TIME) {
-              if (nBufferBytes)
-                snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection timeout from %s:%d (server answer: %.*s)",
-                         casterouthost, casteroutport, nBufferBytes-2, szSendBuffer);
-              else
-                snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 connection no answer from %s:%d",
-                         casterouthost, casteroutport);
-              break;
-            }
-          } // while (output_init && (nBufferBytes < (int) sizeof(szSendBuffer))
+          nBufferBytes = recv_frrom_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv1");
           if (!*msgbuf) {
 #ifndef NDEBUG
-            printf("Destination caster response: %s\n", szSendBuffer);
+            printf("Caster response: %s\n", szSendBuffer);
 #endif
             if (strstr(szSendBuffer, NTRIPv1_RSP_OK_SVR)) {
               //printf("NTRIPv1 server OK for %s:%d/%s\n", casterouthost, casteroutport, nrip1Mountpoint);
@@ -1274,39 +1241,43 @@ int main(int argc, char **argv) {
             break;
           }
           /* check Destination caster's response */
-          nBufferBytes = recv(socket_tcp, szSendBuffer, sizeof(szSendBuffer),  0);
-          szSendBuffer[nBufferBytes] = '\0';
-          if (!strstr(szSendBuffer, "HTTP/1.1 200 OK")) {
-            char *a;
-            msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster's%s reply is not OK: ",
-                *proxyhost ? " or Proxy's" : "");
-            for (a = szSendBuffer; *a && *a != '\n' && *a != '\r'; ++a) {
-              msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%.1s", isprint(*a) ? a : ".");
-            }
-            msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "len=%d", nBufferBytes);
+          nBufferBytes = recv_frrom_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP");
+          if (!*msgbuf) {
+#ifndef NDEBUG
+            printf("Caster response: %s\n", szSendBuffer);
+#endif
+            if (!strstr(szSendBuffer, "HTTP/1.1 200 OK")) {
+               char *a;
+               msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster's%s reply is not OK: ",
+                   *proxyhost ? " or Proxy's" : "");
+               for (a = szSendBuffer; *a && *a != '\n' && *a != '\r'; ++a) {
+                 msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%.1s", isprint(*a) ? a : ".");
+               }
+               msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "len=%d", nBufferBytes);
+               flag_logical_error(msgbuf);
+               /* fallback if necessary */
+               if (!strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
+                 snprintf(msgbuf, sizeof(msgbuf),
+                         "NTRIP 2.0 HTTP not implemented at <%s>%s%s%s falls back to NTRIP 1.0",
+                     casterouthost, *proxyhost ? " or Proxy <" : "", proxyhost,
+                     *proxyhost ? "> or HTTP/1.1 not implemented at Proxy" : "");
+                 flag_logical_error(msgbuf);
+                 close_session(casterouthost, mountpoint, session, rtsp_extension, 1);
+                 useNTRIP1 = 1;
+                 break;
+               } else if ((strstr(szSendBuffer, "HTTP/1.1 401 Unauthorized"))
+                   || (strstr(szSendBuffer, "501 Not Implemented"))) {
+                 reconnect_sec_max = 0;
+               }
+               output_init = 0;
+               break;
+             }
+          } // if (!*msgbuf)
+          if (*msgbuf){
             flag_logical_error(msgbuf);
-            /* fallback if necessary */
-            if (!strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
-              snprintf(msgbuf, sizeof(msgbuf),
-                      "NTRIP 2.0 HTTP not implemented at <%s>%s%s%s falls back to NTRIP 1.0",
-                  casterouthost, *proxyhost ? " or Proxy <" : "", proxyhost,
-                  *proxyhost ? "> or HTTP/1.1 not implemented at Proxy" : "");
-              flag_logical_error(msgbuf);
-              close_session(casterouthost, mountpoint, session, rtsp_extension, 1);
-              useNTRIP1 = 1;
-              break;
-            } else if ((strstr(szSendBuffer, "HTTP/1.1 401 Unauthorized"))
-                || (strstr(szSendBuffer, "501 Not Implemented"))) {
-              reconnect_sec_max = 0;
-            }
             output_init = 0;
             break;
-          }
-#ifndef NDEBUG
-          else {
-            printf("Destination caster response:\n%s\n", szSendBuffer);
-          }
-#endif
+          } // if (output_init)
           send_receive_loop(socket_tcp, outputmode, NULL, 0, 0, chunkymode);
           input_init = output_init = 0;
           break; /* case HTTP */
@@ -2331,6 +2302,49 @@ static uint32_t tickget(void)
     return tv.tv_sec*1000u+tv.tv_usec/1000u;
 #endif
 #endif /* WINDOWSVERSION */
+}
+/********************************************************************
+ * receive all from custer                                          *
+ *********************************************************************/
+int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName)
+{
+    int nBufferBytes = 0;
+    *szSendBuffer = '\0';
+    uint32_t startTick = tickget();
+    *msgbuf = 0;
+    /* check Destination caster's response */
+    while (nBufferBytes < (int)bufferSize) {
+      int nread = recv(socket_tcp, &szSendBuffer[nBufferBytes],  bufferSize - nBufferBytes, 0);
+      if (nread <= 0) {
+        int err=errsock();
+        if ((err!=EALREADY) && (err!=EINPROGRESS)) {
+          if (err==0)
+            snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d",
+                     protocolName, casterouthost, casteroutport);
+          else
+            snprintf(msgbuf, msgbufSize, "%s connection recv error %d (%s) at %s:%d",
+                     protocolName, err, errorstring(err), casterouthost, casteroutport);
+          break;
+        } else {
+          usleep(1000L);
+          continue;
+        }
+      } // if (nread <= 0)
+      nBufferBytes += nread;
+      szSendBuffer[nBufferBytes] = '\0';
+      if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
+        break;
+      if ((int)(tickget()-startTick)>=MAX_NTRIP_CONNECT_TIME) {
+        if (nBufferBytes)
+          snprintf(msgbuf, msgbufSize, "%s connection timeout from %s:%d (server answer: %.*s)",
+                   protocolName, casterouthost, casteroutport, nBufferBytes-2, szSendBuffer);
+        else
+          snprintf(msgbuf, msgbufSize, "%s connection no answer from %s:%d",
+                   protocolName, casterouthost, casteroutport);
+        break;
+      }
+    } // while (output_init && (nBufferBytes < (int) sizeof(szSendBuffer))
+    return nBufferBytes;
 }
 /********************************************************************
  * flag create and erase                                            *
