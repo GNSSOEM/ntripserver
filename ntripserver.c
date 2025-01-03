@@ -204,6 +204,7 @@ static void handle_alarm(int sig);
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
 
 static uint32_t tickget(void);
+static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize);
 static int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName);
 static int errsock(void);
 static char *errorstring(int err);
@@ -779,11 +780,8 @@ int main(int argc, char **argv) {
             } // if( nBufferBytes > 17 && !strstr(szSendBuffer, "ICY 200 OK")  &&
             else if (strstr(szSendBuffer, "\r\n")) {
               if (!strstr(szSendBuffer, "ICY 200 OK")) {
-                int k;
                 msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: could not get requested data from Source caster: ");
-                for (k = 0; k < nBufferBytes && szSendBuffer[k] != '\n' && szSendBuffer[k] != '\r'; ++k) {
-                  msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%c", isprint(szSendBuffer[k]) ? szSendBuffer[k] : '.');
-                }
+                str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
                 flag_logical_error(msgbuf);
                 if (!strstr(szSendBuffer, "SOURCETABLE 200 OK")) {
                   reconnect_sec_max = 0;
@@ -839,12 +837,8 @@ int main(int argc, char **argv) {
           i = sisnet >= 30 ? 7 : 5;
           if ((j = recv(gps_socket, buffer, i, 0)) != i
               && strncmp("*AUTH", buffer, 5)) {
-            msglen = snprintf(msgbuf, sizeof(msgbuf), "WARNING: SISNeT connect failed:");
-            for (i = 0; i < j; ++i) {
-              if (buffer[i] != '\r' && buffer[i] != '\n') {
-                msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%c", isprint(buffer[i]) ? buffer[i] : '.');
-              }
-            }
+            msglen = snprintf(msgbuf, sizeof(msgbuf), "WARNING: SISNeT connect failed: ");
+            str_as_printable(buffer, j, msgbuf+msglen, sizeof(msgbuf)-msglen);
             flag_logical_error(msgbuf);
             input_init = 0;
             break;
@@ -1104,13 +1098,8 @@ int main(int argc, char **argv) {
                     }
                   }
                 } else {
-                  int k;
                   msglen = snprintf(msgbuf, sizeof(msgbuf), "Could not access mountpoint: ");
-                  for (k = 12;
-                      k < numbytes && rtpbuf[k] != '\n' && rtpbuf[k] != '\r';
-                      ++k) {
-                    msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%c", isprint(rtpbuf[k]) ? rtpbuf[k] : '.');
-                  }
+                  str_as_printable(rtpbuf+12, numbytes-12, msgbuf+msglen, sizeof(msgbuf)-msglen);
                   flag_logical_error(msgbuf);
                   stop = 1;
                 }
@@ -1189,24 +1178,16 @@ int main(int argc, char **argv) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
-              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR: %.*s for %s:%d/%s",
-                       nBufferBytes-2, szSendBuffer, casterouthost, casteroutport, nrip1Mountpoint);
+              int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR  for %s:%d/%s: ",
+                                    casterouthost, casteroutport, nrip1Mountpoint);
+              str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
             } else if (nBufferBytes >= NTRIP_MAXRSP) { /* buffer overflow */
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server response OVERFLOW from %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
             } else {
-              char *a;
               msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server reply is NOT OK for %s:%d/%s: ",
                                 casterouthost, casteroutport, nrip1Mountpoint);
-              for (a = szSendBuffer; *a; ++a) {
-                 if (isprint(*a))
-                    msgbuf[msglen++] = *a;
-                 else if ((*a == '\n') || (*a == '\r'))
-                    msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "\\%c", (*a == '\n') ? 'n' : 'r');
-                 else
-                    msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "\\x%02X", *a);
-              }
-              snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "(len=%d)", nBufferBytes);
+              str_as_printable(szSendBuffer, nBufferBytes, msgbuf, sizeof(msgbuf));
             }
           } // if (!*msgbuf)
           if (*msgbuf){
@@ -1247,13 +1228,9 @@ int main(int argc, char **argv) {
             printf("Caster response: %s\n", szSendBuffer);
 #endif
             if (!strstr(szSendBuffer, "HTTP/1.1 200 OK")) {
-               char *a;
                msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster's%s reply is not OK: ",
                    *proxyhost ? " or Proxy's" : "");
-               for (a = szSendBuffer; *a && *a != '\n' && *a != '\r'; ++a) {
-                 msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%.1s", isprint(*a) ? a : ".");
-               }
-               msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "len=%d", nBufferBytes);
+               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
                flag_logical_error(msgbuf);
                /* fallback if necessary */
                if (!strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
@@ -1334,12 +1311,9 @@ int main(int argc, char **argv) {
             /* check Destination caster's response */
             szSendBuffer[nBufferBytes] = '\0';
             if (!strstr(szSendBuffer, "RTSP/1.0 200 OK")) {
-              char *a;
               msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster's%s reply is not OK: ",
                   *proxyhost ? " or Proxy's" : "");
-              for (a = szSendBuffer; *a && *a != '\n' && *a != '\r'; ++a) {
-                msglen += snprintf(msgbuf+msglen, sizeof(msgbuf)-msglen, "%c", isprint(*a) ? *a : '.');
-              }
+              str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
               flag_logical_error(msgbuf);
               /* fallback if necessary */
               if (strncmp(szSendBuffer, "RTSP", 4) != 0) {
@@ -2304,6 +2278,24 @@ static uint32_t tickget(void)
 #endif /* WINDOWSVERSION */
 }
 /********************************************************************
+ * copy str in printable forn                                       *
+ *********************************************************************/
+int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize)
+{
+  int msglen = 0;
+  const char *a;
+  for (a = szSendBuffer; *a; ++a) {
+     if (isprint(*a))
+        msgbuf[msglen++] = *a;
+     else if ((*a == '\n') || (*a == '\r'))
+        msglen += snprintf(msgbuf+msglen, msgbufSize-msglen, "\\%c", (*a == '\n') ? 'n' : 'r');
+     else
+        msglen += snprintf(msgbuf+msglen, msgbufSize-msglen, "\\x%02X", *a);
+  }
+  msglen += snprintf(msgbuf+msglen, msgbufSize-msglen, "(len=%d)", nBufferBytes);
+  return msglen;
+}
+/********************************************************************
  * receive all from custer                                          *
  *********************************************************************/
 int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName)
@@ -2318,10 +2310,15 @@ int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_
       if (nread <= 0) {
         int err=errsock();
         if ((err!=EALREADY) && (err!=EINPROGRESS)) {
-          if (err==0)
-            snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d",
-                     protocolName, casterouthost, casteroutport);
-          else
+          if (err==0)  {
+            if (nBufferBytes) {
+               int msglen = snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d Response: ",
+                                     protocolName, casterouthost, casteroutport);
+               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, msgbufSize-msglen);
+            } else
+               snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d with empty response",
+                        protocolName, casterouthost, casteroutport);
+          } else
             snprintf(msgbuf, msgbufSize, "%s connection recv error %d (%s) at %s:%d",
                      protocolName, err, errorstring(err), casterouthost, casteroutport);
           break;
