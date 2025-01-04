@@ -205,7 +205,7 @@ static void handle_alarm(int sig);
 
 static uint32_t tickget(void);
 static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize);
-static int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName);
+static int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName);
 static int errsock(void);
 static char *errorstring(int err);
 static void flag_create(const char *msg);
@@ -1069,9 +1069,8 @@ int main(int argc, char **argv) {
               break;
             } else {
               int stop = 0;
-              int numbytes;
-              if ((numbytes = recv(socket_tcp, rtpbuf, sizeof(rtpbuf) - 1, 0))
-                  > 0) {
+              int numbytes = recv_from_caster(rtpbuf, sizeof(rtpbuf)-1, msgbuf, sizeof(msgbuf), "NTRIPv2 UDP");
+              if (!*msgbuf){
                 /* we don't expect message longer than 1513, so we cut the last
                  byte for security reasons to prevent buffer overrun */
                 rtpbuf[numbytes] = 0;
@@ -1100,10 +1099,12 @@ int main(int argc, char **argv) {
                 } else {
                   msglen = snprintf(msgbuf, sizeof(msgbuf), "Could not access mountpoint: ");
                   str_as_printable(rtpbuf+12, numbytes-12, msgbuf+msglen, sizeof(msgbuf)-msglen);
-                  flag_logical_error(msgbuf);
-                  stop = 1;
                 }
-              }
+              } // if (!*msgbuf)
+              if (*msgbuf){
+                flag_logical_error(msgbuf);
+                stop = 1;
+              } // if (output_init)
               if (!stop) {
                 send_receive_loop(socket_tcp, outputmode, NULL, 0, session, chunkymode);
                 input_init = output_init = 0;
@@ -1153,7 +1154,7 @@ int main(int argc, char **argv) {
             break;
           }
           /* check Destination caster's response */
-          nBufferBytes = recv_frrom_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv1");
+          nBufferBytes = recv_from_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv1");
           if (!*msgbuf) {
 #ifndef NDEBUG
             printf("Caster response: %s\n", szSendBuffer);
@@ -1222,7 +1223,7 @@ int main(int argc, char **argv) {
             break;
           }
           /* check Destination caster's response */
-          nBufferBytes = recv_frrom_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP");
+          nBufferBytes = recv_from_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP");
           if (!*msgbuf) {
 #ifndef NDEBUG
             printf("Caster response: %s\n", szSendBuffer);
@@ -1306,24 +1307,28 @@ int main(int argc, char **argv) {
             output_init = 0;
             break;
           }
-          while ((nBufferBytes = recv(socket_tcp, szSendBuffer,
-              sizeof(szSendBuffer), 0)) > 0) {
+
+          while ((nBufferBytes = recv_from_caster(szSendBuffer,
+              sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv2 RTSP")) > 0) {
             /* check Destination caster's response */
-            szSendBuffer[nBufferBytes] = '\0';
+            if (*msgbuf)
+               break;
             if (!strstr(szSendBuffer, "RTSP/1.0 200 OK")) {
               msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster's%s reply is not OK: ",
                   *proxyhost ? " or Proxy's" : "");
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
               flag_logical_error(msgbuf);
+              *msgbuf = 0;
               /* fallback if necessary */
               if (strncmp(szSendBuffer, "RTSP", 4) != 0) {
                 if (strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
-                  snprintf(msgbuf, sizeof(msgbuf), 
+                  snprintf(msgbuf, sizeof(msgbuf),
                       "       RTSP not implemented at Destination caster <%s>%s%s%s"
                           "ntripserver falls back to Ntrip Version 2.0 in TCP/IP mode", casterouthost,
                       *proxyhost ? " or Proxy <" : "", proxyhost,
                       *proxyhost ? ">" : "");
                   flag_logical_error(msgbuf);
+                  *msgbuf = 0;
                   close_session(casterouthost, mountpoint, session,
                       rtsp_extension, 1);
                   outputmode = HTTP;
@@ -1337,6 +1342,7 @@ int main(int argc, char **argv) {
                       *proxyhost ? " or HTTP/1.1 not implemented at Proxy\n" : "",
                       *proxyhost ? " or Proxy" : "");
                   flag_logical_error(msgbuf);
+                  *msgbuf = 0;
                   close_session(casterouthost, mountpoint, session,
                       rtsp_extension, 1);
                   useNTRIP1 = 1;
@@ -1404,6 +1410,8 @@ int main(int argc, char **argv) {
               break;
             }
           } /* while ((nBufferBytes = recv(socket_tcp, szSendBuffer */
+          if (*msgbuf)
+            flag_logical_error(msgbuf);
           input_init = output_init = 0;
           break; /* case RTSP */
         case TCPIP:
@@ -2298,7 +2306,7 @@ int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, s
 /********************************************************************
  * receive all from custer                                          *
  *********************************************************************/
-int recv_frrom_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName)
+int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName)
 {
     int nBufferBytes = 0;
     *szSendBuffer = '\0';
