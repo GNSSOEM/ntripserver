@@ -191,16 +191,20 @@ static void handle_alarm(int sig);
 #define FLAG_MSG_SIZE 1024
 #define NTRIP_MINRSP 14
 #define MAX_NTRIP_CONNECT_TIME   5000  /* 5 sec    = 5 000 ms */
-#define NTRIPv1_RSP_OK_SVR    "OK\r\n"               /* ntrip response: server OK */
+#define NTRIPv1_RSP_OK_SVR    "OK\r\n"               /* ntrip v1 response: server OK */
+#define NTRIPv2_RSP_OK_SVR    "HTTP/1.1 200 OK"      /* ntrip v2 response: server OK */
 #define NTRIPv1_RSP_ERROR     "Bad Request"          /* ntrip v1 response: error */
 #define NTRIPv2_RSP_ERROR     "ERROR"                /* ntrip v2 response: error */
 #define NTRIPv1_RSP_NOT_FOUND "Mount Point Invalid"  /* ntrip v1 response: not found */
 #define NTRIPv2_RSP_NOT_FOUND "Not Found"            /* ntrip v2 response: not found */
 #define NTRIPv1_RSP_UNAUTH    "Bad Password"         /* ntrip v1 response: unauthorized */
 #define NTRIPv2_RSP_UNAUTH    "Unauthorized"         /* ntrip v2 response: unauthorized */
-#define NTRIPv1_RSP_USED1      "Mount Point Taken"    /* ntrip v2 response: already used */
+#define NTRIPv1_RSP_USED1     "Mount Point Taken"    /* ntrip v1 response: already used */
 #define NTRIPv2_RSP_USED      "Conflict"             /* ntrip v2 response: already used */
 #define NTRIPv1_RSP_USED2     "Mount Point Taken or Invalid"  /* ntrip v1 response: not found */
+#define NTRIPv2_RSP_NOTIMPL   "Implemented"          /* ntrip v2 response: not implemented */
+#define NTRIPv2_RSP_UNAVAIL   "Unavailable"          /* ntrip v2 response: unavailable */
+#define NTRIPv2_RSP_VERSION   "Ntrip-Version: Ntrip/2" /* ntrip v2 response: version */
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
 
 static uint32_t tickget(void);
@@ -1175,11 +1179,11 @@ int main(int argc, char **argv) {
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED2)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED or INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED1) || strstr(szSendBuffer, NTRIPv2_RSP_USED) || strstr(szSendBuffer, NTRIPv2_RSP_USED)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED1) || strstr(szSendBuffer, NTRIPv1_RSP_USED2) || strstr(szSendBuffer, NTRIPv2_RSP_USED)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
-              int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR  for %s:%d/%s: ",
+              int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR for %s:%d/%s: ",
                                     casterouthost, casteroutport, nrip1Mountpoint);
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
             } else if (nBufferBytes >= NTRIP_MAXRSP) { /* buffer overflow */
@@ -1225,34 +1229,57 @@ int main(int argc, char **argv) {
           /* check Destination caster's response */
           nBufferBytes = recv_from_caster(szSendBuffer, sizeof(szSendBuffer), msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP");
           if (!*msgbuf) {
-#ifndef NDEBUG
+//#ifndef NDEBUG
             printf("Caster response: %s\n", szSendBuffer);
-#endif
-            if (!strstr(szSendBuffer, "HTTP/1.1 200 OK")) {
-               msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: Destination caster's%s reply is not OK: ",
-                   *proxyhost ? " or Proxy's" : "");
-               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
-               flag_logical_error(msgbuf);
-               /* fallback if necessary */
-               if (!strstr(szSendBuffer, "Ntrip-Version: Ntrip/2.0\r\n")) {
-                 snprintf(msgbuf, sizeof(msgbuf),
-                         "NTRIP 2.0 HTTP not implemented at <%s>%s%s%s falls back to NTRIP 1.0",
-                     casterouthost, *proxyhost ? " or Proxy <" : "", proxyhost,
-                     *proxyhost ? "> or HTTP/1.1 not implemented at Proxy" : "");
-                 flag_logical_error(msgbuf);
-                 close_session(casterouthost, mountpoint, session, rtsp_extension, 1);
+//#endif
+            if (strstr(szSendBuffer, NTRIPv2_RSP_OK_SVR)) {
+              //printf("NTRIPv1 server OK for %s:%d/%s\n", casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (nBufferBytes == 0) { /* buffer epmpty */
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server NO ANY response from %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server mountpoint is INVALID for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+              reconnect_sec_max = 0;
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server password is INVALID for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+              reconnect_sec_max = 0;
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_USED)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server mountpoint is ALREADY USED for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOTIMPL)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server NOT IMLEMENTED for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+              useNTRIP1 = 1;
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAVAIL)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server UNAVAILABLE for %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
+              int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server ERROR for %s:%d/%s: ",
+                                    casterouthost, casteroutport, nrip1Mountpoint);
+              str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
+            } else if (nBufferBytes >= NTRIP_MAXRSP) { /* buffer overflow */
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server response OVERFLOW from %s:%d/%s",
+                       casterouthost, casteroutport, nrip1Mountpoint);
+            } else {
+              msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server%s replys is NOT OK for %s:%d/%s: ",
+                                *proxyhost ? " or Proxy's" : "", casterouthost, casteroutport, nrip1Mountpoint);
+              str_as_printable(szSendBuffer, nBufferBytes, msgbuf, sizeof(msgbuf));
+              if (!strstr(szSendBuffer, NTRIPv2_RSP_VERSION))
                  useNTRIP1 = 1;
-                 break;
-               } else if ((strstr(szSendBuffer, "HTTP/1.1 401 Unauthorized"))
-                   || (strstr(szSendBuffer, "501 Not Implemented"))) {
-                 reconnect_sec_max = 0;
-               }
-               output_init = 0;
-               break;
-             }
+            }
           } // if (!*msgbuf)
           if (*msgbuf){
             flag_logical_error(msgbuf);
+            if (useNTRIP1) {
+              snprintf(msgbuf, sizeof(msgbuf),
+                       "NTRIP 2.0 HTTP not implemented at <%s>%s%s%s falls back to NTRIP 1.0",
+                       casterouthost, *proxyhost ? " or Proxy <" : "", proxyhost,
+                       *proxyhost ? "> or HTTP/1.1 not implemented at Proxy" : "");
+              flag_logical_error(msgbuf);
+              close_session(casterouthost, mountpoint, session, rtsp_extension, 1);
+            }
             output_init = 0;
             break;
           } // if (output_init)
