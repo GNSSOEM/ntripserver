@@ -2346,6 +2346,8 @@ int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t
         int err=errsock();
         if ((err!=EALREADY) && (err!=EINPROGRESS)) {
           if (err==0)  {
+            if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
+               break;
             if (nBufferBytes) {
                int msglen = snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d Response: ",
                                      protocolName, casterouthost, casteroutport);
