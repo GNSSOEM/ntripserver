@@ -2274,16 +2274,16 @@ static int send_to_caster(char *input, sockettype socket, int input_size) {
  * reconnect                                                        *
  *********************************************************************/
 int reconnect(int rec_sec, int rec_sec_max) {
-  printf("tcp connect pause %d sec\n", rec_sec);
-  rec_sec *= 2;
   if (rec_sec > rec_sec_max)
     rec_sec = rec_sec_max;
+  printf("tcp connect pause %d sec\n", rec_sec);
 #ifndef WINDOWSVERSION
   sleep(rec_sec);
   sigpipe_received = 0;
 #else
   Sleep(rec_sec*1000);
 #endif
+  rec_sec *= 2;
   sigalarm_received = 0;
   return rec_sec;
 } /* reconnect */
