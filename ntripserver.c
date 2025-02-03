@@ -206,6 +206,7 @@ static void handle_alarm(int sig);
 #define NTRIPv2_RSP_UNAVAIL   "Unavailable"          /* ntrip v2 response: unavailable */
 #define NTRIPv2_RSP_VERSION   "Ntrip-Version: Ntrip/2" /* ntrip v2 response: version */
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
+#define MIN_PAUSE_AT_EMPTY    20                     /* min pause for EMPTY response */
 
 static uint32_t tickget(void);
 static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize);
@@ -2352,9 +2353,12 @@ int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t
                int msglen = snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d Response: ",
                                      protocolName, casterouthost, casteroutport);
                str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, msgbufSize-msglen);
-            } else
+            } else {
                snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d with EMPTY response",
                         protocolName, casterouthost, casteroutport);
+               if (reconnect_sec < MIN_PAUSE_AT_EMPTY)
+                  reconnect_sec = MIN_PAUSE_AT_EMPTY;
+            }
           } else
             snprintf(msgbuf, msgbufSize, "%s connection recv error %d (%s) at %s:%d",
                      protocolName, err, errorstring(err), casterouthost, casteroutport);
