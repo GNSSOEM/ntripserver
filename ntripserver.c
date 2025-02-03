@@ -1256,7 +1256,7 @@ int main(int argc, char **argv) {
             } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAVAIL)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP UNAVAILABLE for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
               int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP ERROR for %s:%d/%s: ",
                                     casterouthost, casteroutport, mountpoint);
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
