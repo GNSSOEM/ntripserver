@@ -167,11 +167,12 @@ static int udp_tim, udp_seq, udp_init;
 const char *flagpath = "";
 const char *outhost = 0;
 unsigned int outport = 0;
+int output_v2http_chunken = 1;
 
 /* Forward references */
 static void send_receive_loop(sockettype sock, int outmode,
     struct sockaddr *pcasterRTP, socklen_t length, unsigned int rtpssrc,
-    int chnunkymode);
+    int chunkymode);
 static void usage(int, char*);
 static int encode(char *buf, int size, const char *user, const char *pwd);
 static int send_to_caster(char *input, sockettype socket, int input_size);
@@ -1213,9 +1214,10 @@ int main(int argc, char **argv) {
                   "User-Agent: %s/%s\r\n"
                   "Authorization: Basic %s%s%s\r\n"
                   "Connection: close\r\n"
-                  "Transfer-Encoding: chunked\r\n\r\n", post_extension,
+                  "%s\r\n", post_extension,
               mountpoint, casterouthost, AGENTSTRING, revisionstr,
-              authorization, ntrip_str ? "\r\nNtrip-STR: " : "", ntrip_str);
+              authorization, ntrip_str ? "\r\nNtrip-STR: " : "", ntrip_str,
+              output_v2http_chunken ? "Transfer-Encoding: chunked\r\n" : "");
           if ((nBufferBytes > (int) sizeof(szSendBuffer))
               || (nBufferBytes < 0)) {
             flag_logical_error("ERROR: Destination caster request to long");
@@ -1503,7 +1505,8 @@ static void send_receive_loop(sockettype sock, int outmode,
   const char *actualMountpoint = (currentoutputmode == NTRIP1) ? nrip1Mountpoint : mountpoint;
   printf("NTRIP connected to %s://%s:%d/%s\n",
          currentoutputmode == NTRIP1 ? "ntrip1" :
-         currentoutputmode == HTTP   ? "ntrip2_http"   :
+         (currentoutputmode == HTTP) && !output_v2http_chunken ? "ntrip2_http"   :
+         (currentoutputmode == HTTP) && output_v2http_chunken ? "ntrip2_chunken_http"   :
          currentoutputmode == UDP    ? "ntrip2_udp"    :
          currentoutputmode == RTSP   ? "ntrip2_rtsp"   : "tcpip",
          casterouthost, casteroutport, actualMountpoint);
@@ -1702,7 +1705,7 @@ static void send_receive_loop(sockettype sock, int outmode,
     /*****************/
     /*  send data    */
     /*****************/
-    if ((nBufferBytes) && (outmode == NTRIP1 || outmode == TCPIP)) {
+    if (nBufferBytes && ((outmode == NTRIP1) || (outmode == TCPIP) || (!output_v2http_chunken && (outmode == HTTP)))) {
       int i;
       if ((i = send_and_msg(sock, buffer, (size_t) nBufferBytes, MSG_DONTWAIT)) != nBufferBytes) {
         if (i < 0) {
@@ -1765,7 +1768,7 @@ static void send_receive_loop(sockettype sock, int outmode,
       }
     }
     /*** Ntrip-Version 2.0 HTTP/1.1 ***/
-    else if ((nBufferBytes) && (outmode == HTTP)) {
+    else if (nBufferBytes && (outmode == HTTP) && output_v2http_chunken) {
       if (!remainChunk) {
         int nChunkBytes = snprintf(szSendBuffer, sizeof(szSendBuffer), "%x\r\n", nBufferBytes);
         if (send_and_msg(sock, szSendBuffer, nChunkBytes, 0) < 0)
