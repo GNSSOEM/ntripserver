@@ -206,7 +206,7 @@ static void handle_alarm(int sig);
 #define NTRIPv2_RSP_UNAVAIL   "Unavailable"          /* ntrip v2 response: unavailable */
 #define NTRIPv2_RSP_VERSION   "Ntrip-Version: Ntrip/2" /* ntrip v2 response: version */
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
-#define MIN_PAUSE_AT_EMPTY    20                     /* min pause for EMPTY response */
+#define MIN_PAUSE_AT_EMPTY    15                     /* min pause for EMPTY response */
 
 static uint32_t tickget(void);
 static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize);
