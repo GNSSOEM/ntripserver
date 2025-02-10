@@ -1483,6 +1483,7 @@ static ssize_t send_and_msg(int sock, const void *buffer, size_t length, int fla
   return i;
 }
 
+#define SKIP_MAX_NO_RTCM3_PACKETS 3
 static void send_receive_loop(sockettype sock, int outmode,
     struct sockaddr *pcasterRTP, socklen_t length, unsigned int rtpssrc,
     int chunkymode) {
@@ -1501,6 +1502,7 @@ static void send_receive_loop(sockettype sock, int outmode,
   int rtpseq = 0;
   int rtptime = 0;
   time_t laststate = time(0);
+  int firstInputRtcm3 = SKIP_MAX_NO_RTCM3_PACKETS;
 
   const char *actualMountpoint = (currentoutputmode == NTRIP1) ? nrip1Mountpoint : mountpoint;
   printf("NTRIP connected to %s://%s:%d/%s\n",
@@ -1699,6 +1701,33 @@ static void send_receive_loop(sockettype sock, int outmode,
         memset((char*) &buffer, 0x00, sizeof(buffer));
         memcpy(buffer, chunkBytes, (size_t) totalbytes);
         nBufferBytes = totalbytes;
+      }
+    }
+
+    /****************************/
+    /* control 1st RTCM3 packet */
+    /****************************/
+    if (firstInputRtcm3 && nBufferBytes) {
+      //printf("firstInputRtcm3 nBufferBytes=%d\n",nBufferBytes);
+      for (int i=0; i < (nBufferBytes-1); i++) {
+         if ((buffer[i] == 0xD3) && ((buffer[i+1] & 0xFC) == 0)) {
+           if ((firstInputRtcm3 != SKIP_MAX_NO_RTCM3_PACKETS) && (i != 0)) {
+              int nPkt = (buffer[i+3] << 4) | (buffer[i+4] >> 4);
+              printf("RTCM3 start at %d packet RTCM_%d pos=%d nBufferBytes=%d\n",
+                     SKIP_MAX_NO_RTCM3_PACKETS - firstInputRtcm3 + 1, nPkt, i, nBufferBytes);
+           }
+           firstInputRtcm3 = 0;
+           if (i > 0) {
+              memmove(buffer, buffer + i, (size_t) (nBufferBytes - i));
+              nBufferBytes -= i;
+           }
+           break;
+         }
+      }
+      if (firstInputRtcm3) {
+        firstInputRtcm3--;
+        if (!firstInputRtcm3) printf("start at last packet\n");
+        continue;
       }
     }
 
