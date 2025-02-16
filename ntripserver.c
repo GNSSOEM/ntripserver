@@ -153,6 +153,7 @@ static int sigpipe_received = 0;
 #else
   HANDLE gps_serial = INVALID_HANDLE_VALUE;
 #endif
+static int in_reconnect_pause = 0;
 static int sigalarm_received = 0;
 static int sigint_received = 0;
 static int reconnect_sec = 1;
@@ -2199,8 +2200,10 @@ static void handle_alarm(int sig __attribute__((__unused__)))
 static void handle_alarm(int sig)
 #endif /* __GNUC__ */
 {
-  sigalarm_received = 1;
-  flag_int_error("ERROR: more than %d seconds no activity", ALARMTIME);
+  if (!in_reconnect_pause) {
+     sigalarm_received = 1;
+     flag_int_error("ERROR: more than %d seconds no activity", ALARMTIME);
+  };
 }
 
 #ifdef __GNUC__
@@ -2309,13 +2312,17 @@ int reconnect(int rec_sec, int rec_sec_max) {
   if (rec_sec > rec_sec_max)
     rec_sec = rec_sec_max;
   printf("tcp connect pause %d sec\n", rec_sec);
+  in_reconnect_pause = 1;
 #ifndef WINDOWSVERSION
+  alarm(0);
   sleep(rec_sec);
   sigpipe_received = 0;
+  alarm(ALARMTIME);
 #else
   Sleep(rec_sec*1000);
 #endif
   rec_sec *= 2;
+  in_reconnect_pause = 0;
   sigalarm_received = 0;
   return rec_sec;
 } /* reconnect */
