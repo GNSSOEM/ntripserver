@@ -1193,14 +1193,13 @@ int main(int argc, char **argv) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR) || strstr(szSendBuffer, CODE_RSP_ERROR)) {
-              int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR for %s:%d/%s: ",
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR for %s:%d/%s",
                                     casterouthost, casteroutport, nrip1Mountpoint);
-              str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
             } else if (nBufferBytes >= NTRIP_MAXRSP) { /* buffer overflow */
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server response OVERFLOW from %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
             } else {
-              msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server reply is NOT OK for %s:%d/%s: ",
+              msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server is NOT OK for %s:%d/%s: ",
                                 casterouthost, casteroutport, nrip1Mountpoint);
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf, sizeof(msgbuf));
             }
@@ -1267,14 +1266,13 @@ int main(int argc, char **argv) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP UNAVAILABLE for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR) || strstr(szSendBuffer, CODE_RSP_ERROR)) {
-              int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP ERROR for %s:%d/%s: ",
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server ERROR for %s:%d/%s",
                                     casterouthost, casteroutport, mountpoint);
-              str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
             } else if (nBufferBytes >= NTRIP_MAXRSP) { /* buffer overflow */
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 response OVERFLOW from %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
             } else {
-              msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server%s replys is NOT OK for %s:%d/%s: ",
+              msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP server%s is NOT OK for %s:%d/%s: ",
                                 *proxyhost ? " or Proxy's" : "", casterouthost, casteroutport, mountpoint);
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf, sizeof(msgbuf));
               if (!strstr(szSendBuffer, NTRIPv2_RSP_VERSION))
