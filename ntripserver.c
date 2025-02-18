@@ -195,17 +195,24 @@ static void handle_alarm(int sig);
 #define MAX_NTRIP_CONNECT_TIME   5000  /* 5 sec    = 5 000 ms */
 #define NTRIPv1_RSP_OK_SVR    "OK\r\n"               /* ntrip v1 response: server OK */
 #define NTRIPv2_RSP_OK_SVR    "HTTP/1.1 200 OK"      /* ntrip v2 response: server OK */
+#define CODE_RSP_OK_SVR       " 200 "                /* ntrip v2 response: server OK */
 #define NTRIPv1_RSP_ERROR     "Bad Request"          /* ntrip v1 response: error */
 #define NTRIPv2_RSP_ERROR     "ERROR"                /* ntrip v2 response: error */
+#define CODE_RSP_ERROR        " 500 "                /* ntrip v2 response: error */
 #define NTRIPv1_RSP_NOT_FOUND "Mount Point Invalid"  /* ntrip v1 response: not found */
 #define NTRIPv2_RSP_NOT_FOUND "Not Found"            /* ntrip v2 response: not found */
+#define CODE_RSP_NOT_FOUND    " 404 "                /* ntrip v2 response: not found */
 #define NTRIPv1_RSP_UNAUTH    "Bad Password"         /* ntrip v1 response: unauthorized */
 #define NTRIPv2_RSP_UNAUTH    "Unauthorized"         /* ntrip v2 response: unauthorized */
+#define CODE_RSP_UNAUTH       " 401 "                /* ntrip v2 response: unauthorized */
 #define NTRIPv1_RSP_USED1     "Mount Point Taken"    /* ntrip v1 response: already used */
 #define NTRIPv2_RSP_USED      "Conflict"             /* ntrip v2 response: already used */
+#define CODE_RSP_USED         " 409 "                  /* ntrip v2 response: already used */
 #define NTRIPv1_RSP_USED2     "Mount Point Taken or Invalid"  /* ntrip v1 response: not found */
 #define NTRIPv2_RSP_NOTIMPL   "Implemented"          /* ntrip v2 response: not implemented */
+#define CODE_RSP_NOTIMPL      " 501 "                /* ntrip v2 response: not implemented */
 #define NTRIPv2_RSP_UNAVAIL   "Unavailable"          /* ntrip v2 response: unavailable */
+#define CODE_RSP_UNAVAIL      " 503 "          /* ntrip v2 response: unavailable */
 #define NTRIPv2_RSP_VERSION   "Ntrip-Version: Ntrip/2" /* ntrip v2 response: version */
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
 #define MIN_PAUSE_AT_EMPTY    15                     /* min pause for EMPTY response */
@@ -1166,26 +1173,26 @@ int main(int argc, char **argv) {
 #ifndef NDEBUG
             printf("Caster response: %s\n", szSendBuffer);
 #endif
-            if (strstr(szSendBuffer, NTRIPv1_RSP_OK_SVR)) {
+            if (strstr(szSendBuffer, NTRIPv1_RSP_OK_SVR) || strstr(szSendBuffer, CODE_RSP_OK_SVR)) {
               //printf("NTRIPv1 server OK for %s:%d/%s\n", casterouthost, casteroutport, nrip1Mountpoint);
             } else if (nBufferBytes == 0) { /* buffer epmpty */
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server NO ANY response from %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv1_RSP_NOT_FOUND) || strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_NOT_FOUND) || strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND) || strstr(szSendBuffer, CODE_RSP_NOT_FOUND)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
               reconnect_sec_max = 0;
-            } else if (strstr(szSendBuffer, NTRIPv1_RSP_UNAUTH) || strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_UNAUTH) || strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH) || strstr(szSendBuffer, CODE_RSP_UNAUTH)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server password is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
               reconnect_sec_max = 0;
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED2)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED or INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED1) || strstr(szSendBuffer, NTRIPv1_RSP_USED2) || strstr(szSendBuffer, NTRIPv2_RSP_USED)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED1) || strstr(szSendBuffer, NTRIPv1_RSP_USED2) || strstr(szSendBuffer, NTRIPv2_RSP_USED) || strstr(szSendBuffer, CODE_RSP_USED)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR) || strstr(szSendBuffer, CODE_RSP_ERROR)) {
               int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server ERROR for %s:%d/%s: ",
                                     casterouthost, casteroutport, nrip1Mountpoint);
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
@@ -1236,30 +1243,30 @@ int main(int argc, char **argv) {
 #ifndef NDEBUG
             printf("Caster response: %s\n", szSendBuffer);
 #endif
-            if (strstr(szSendBuffer, NTRIPv2_RSP_OK_SVR)) {
-              //printf("NTRIPv1 server OK for %s:%d/%s\n", casterouthost, casteroutport, mountpoint);
+            if (strstr(szSendBuffer, NTRIPv2_RSP_OK_SVR) || strstr(szSendBuffer, CODE_RSP_OK_SVR)) {
+              //printf("NTRIPv2 server OK for %s:%d/%s\n", casterouthost, casteroutport, mountpoint);
             } else if (nBufferBytes == 0) { /* buffer epmpty */
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP NO ANY response from %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND)) {
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND) || strstr(szSendBuffer, CODE_RSP_NOT_FOUND)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP mountpoint is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
               reconnect_sec_max = 0;
-            } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH)) {
-              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP password is INVALID for %s:%d/%s",
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH) || strstr(szSendBuffer, CODE_RSP_UNAUTH)) {
+              snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP login/password is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
               reconnect_sec_max = 0;
-            } else if (strstr(szSendBuffer, NTRIPv2_RSP_USED)) {
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_USED) || strstr(szSendBuffer, CODE_RSP_USED)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP mountpoint is ALREADY USED for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOTIMPL)) {
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOTIMPL) || strstr(szSendBuffer, CODE_RSP_NOTIMPL)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP NOT IMLEMENTED for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
               useNTRIP1 = 1;
-            } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAVAIL)) {
+            } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAVAIL) || strstr(szSendBuffer, CODE_RSP_UNAVAIL)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP UNAVAILABLE for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
-            } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR)) {
+            } else if (strstr(szSendBuffer, NTRIPv1_RSP_ERROR) || strstr(szSendBuffer, NTRIPv2_RSP_ERROR) || strstr(szSendBuffer, CODE_RSP_ERROR)) {
               int msglen = snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP ERROR for %s:%d/%s: ",
                                     casterouthost, casteroutport, mountpoint);
               str_as_printable(szSendBuffer, nBufferBytes, msgbuf+msglen, sizeof(msgbuf)-msglen);
