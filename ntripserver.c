@@ -169,6 +169,8 @@ const char *flagpath = "";
 const char *outhost = 0;
 unsigned int outport = 0;
 int output_v2http_chunken = 1;
+int was_1st_ntrip_connect = 0;
+int reconnect_sec_max = 0;
 
 /* Forward references */
 static void send_receive_loop(sockettype sock, int outmode,
@@ -216,9 +218,11 @@ static void handle_alarm(int sig);
 #define NTRIPv2_RSP_VERSION   "Ntrip-Version: Ntrip/2" /* ntrip v2 response: version */
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
 #define MIN_PAUSE_AT_EMPTY    15                     /* min pause for EMPTY response */
+#define MIN_PAUSE_AT_UNAUTH   30                     /* min pause for UNAUTHORIZED response */
 
 static uint32_t tickget(void);
 static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize);
+static void set_reconnect_time_at_hard_error(void);
 static int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName);
 static int errsock(void);
 static char *errorstring(int err);
@@ -305,8 +309,6 @@ int main(int argc, char **argv) {
   char *dlim = " \r\n=";
   char *token;
   char *tok_buf[BUFSZ];
-
-  int reconnect_sec_max = 0;
 
   setbuf(stdout, 0);
   setbuf(stdin, 0);
@@ -1181,11 +1183,11 @@ int main(int argc, char **argv) {
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_NOT_FOUND) || strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND) || strstr(szSendBuffer, CODE_RSP_NOT_FOUND)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
-              reconnect_sec_max = 0;
+              set_reconnect_time_at_hard_error();
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_UNAUTH) || strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH) || strstr(szSendBuffer, CODE_RSP_UNAUTH)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server password is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
-              reconnect_sec_max = 0;
+              set_reconnect_time_at_hard_error();
             } else if (strstr(szSendBuffer, NTRIPv1_RSP_USED2)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv1 server mountpoint is ALREADY USED or INVALID for %s:%d/%s",
                        casterouthost, casteroutport, nrip1Mountpoint);
@@ -1250,11 +1252,11 @@ int main(int argc, char **argv) {
             } else if (strstr(szSendBuffer, NTRIPv2_RSP_NOT_FOUND) || strstr(szSendBuffer, CODE_RSP_NOT_FOUND)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP mountpoint is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
-              reconnect_sec_max = 0;
+              set_reconnect_time_at_hard_error();
             } else if (strstr(szSendBuffer, NTRIPv2_RSP_UNAUTH) || strstr(szSendBuffer, CODE_RSP_UNAUTH)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP login/password is INVALID for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
-              reconnect_sec_max = 0;
+              set_reconnect_time_at_hard_error();
             } else if (strstr(szSendBuffer, NTRIPv2_RSP_USED) || strstr(szSendBuffer, CODE_RSP_USED)) {
               snprintf(msgbuf, sizeof(msgbuf), "NTRIPv2 HTTP mountpoint is ALREADY USED for %s:%d/%s",
                        casterouthost, casteroutport, mountpoint);
@@ -1519,6 +1521,7 @@ static void send_receive_loop(sockettype sock, int outmode,
          currentoutputmode == RTSP   ? "ntrip2_rtsp"   : "tcpip",
          casterouthost, casteroutport, actualMountpoint);
   flag_erase();
+  was_1st_ntrip_connect = 1;
 
   if (outmode == UDP) {
     rtptime = time(0);
@@ -1735,7 +1738,7 @@ static void send_receive_loop(sockettype sock, int outmode,
         if (!firstInputRtcm3) printf("start at last packet\n");
         continue;
       }
-    }
+    } // if (firstInputRtcm3 && nBufferBytes)
 
     /*****************/
     /*  send data    */
@@ -2374,6 +2377,17 @@ int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, s
   }
   msglen += snprintf(msgbuf+msglen, msgbufSize-msglen, "(len=%d)", nBufferBytes);
   return msglen;
+}
+/********************************************************************
+ * set reconnect time at hard error                                 *
+ *********************************************************************/
+void set_reconnect_time_at_hard_error(void)
+{
+  if (was_1st_ntrip_connect) {
+    if (reconnect_sec < MIN_PAUSE_AT_UNAUTH)
+      reconnect_sec = MIN_PAUSE_AT_UNAUTH;
+  } else
+    reconnect_sec = reconnect_sec_max;
 }
 /********************************************************************
  * receive all from custer                                          *
