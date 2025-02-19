@@ -219,6 +219,7 @@ static void handle_alarm(int sig);
 #define NTRIP_MAXRSP          2048                   /* max size of ntrip response */
 #define MIN_PAUSE_AT_EMPTY    15                     /* min pause for EMPTY response */
 #define MIN_PAUSE_AT_UNAUTH   30                     /* min pause for UNAUTHORIZED response */
+#define DROP_PROGRESSIVE_COUNT 30                    /* packet count for drop tiomeout */
 
 static uint32_t tickget(void);
 static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *msgbuf, size_t msgbufSize);
@@ -1554,8 +1555,6 @@ static void send_receive_loop(sockettype sock, int outmode,
   time_t nodata_begin = 0, nodata_current = 0;
 #endif
   while (1) {
-    if (send_recv_success < 3)
-      send_recv_success++;
     if (!nodata) {
 #ifndef WINDOWSVERSION
       alarm(ALARMTIME);
@@ -1648,6 +1647,8 @@ static void send_receive_loop(sockettype sock, int outmode,
     }
     if (nBufferBytes < 0)
       return;
+
+    send_recv_success++;
 
     if (chunkymode) {
       int cstop = 0;
@@ -1914,7 +1915,7 @@ static void send_receive_loop(sockettype sock, int outmode,
         return;
       }
     }
-    if (send_recv_success == 3)
+    if (send_recv_success == DROP_PROGRESSIVE_COUNT)
       reconnect_sec = 1;
   } /* while (1) */
   return;
