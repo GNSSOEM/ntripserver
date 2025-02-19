@@ -1627,12 +1627,12 @@ static void send_receive_loop(sockettype sock, int outmode,
 #endif
 
       if (!nBufferBytes) {
-        flag_socket_error("WARNING: no data received from input");
+        //flag_socket_error("WARNING: no data received from input");
         nodata = 1;
 #ifndef WINDOWSVERSION
-        sleep(3);
+        usleep(100000);
 #else
-        Sleep(3*1000);
+        Sleep(100);
 #endif
         continue;
       } else if ((nBufferBytes < 0) && (!sigint_received)) {
