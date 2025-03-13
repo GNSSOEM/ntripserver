@@ -942,9 +942,14 @@ int main(int argc, char **argv) {
 #endif
 
       if (!(he = gethostbyname(outhost))) {
-        flag_str_error("ERROR: Destination caster, server or proxy host <%s> unknown", outhost);
+        int err=h_errno;
+        msglen = snprintf(msgbuf, sizeof(msgbuf), "ERROR: <%s> DNS error <%s>", outhost, hstrerror(err));
+        flag_logical_error(msgbuf);
         close_session(casterouthost, mountpoint, session, rtsp_extension, 0);
-        exit(IO_ERROR);
+        if (err == TRY_AGAIN)
+           break;
+        else
+           exit(IO_ERROR);
       } else {
         //printf("Destination caster, server or proxy host <%s>\n", outhost);
       }
