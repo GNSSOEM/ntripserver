@@ -226,6 +226,7 @@ static int str_as_printable(const char *szSendBuffer, int nBufferBytes, char *ms
 static void set_reconnect_time_at_hard_error(void);
 static int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t msgbufSize, const char *protocolName);
 static int errsock(void);
+static void errclear(void);
 static char *errorstring(int err);
 static void flag_create(const char *msg);
 static void flag_erase(void);
@@ -2404,12 +2405,13 @@ int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t
     *szSendBuffer = '\0';
     uint32_t startTick = tickget();
     *msgbuf = 0;
+    errclear();
     /* check Destination caster's response */
     while (nBufferBytes < (int)bufferSize) {
       int nread = recv(socket_tcp, &szSendBuffer[nBufferBytes],  bufferSize - nBufferBytes, 0);
       if (nread <= 0) {
         int err=errsock();
-        if ((err!=EALREADY) && (err!=EINPROGRESS)) {
+        if ((err!=EAGAIN) && (err!=EWOULDBLOCK)) {
           if (err==0)  {
             if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
                break;
@@ -2472,8 +2474,10 @@ static void flag_erase(void)
 /* get socket error ----------------------------------------------------------*/
 #ifdef WINDOWSVERSION
 static int errsock(void) {return WSAGetLastError();}
+static void errclear(void) {WSASetLastError(0);}
 #else
 static int errsock(void) {return errno;}
+static void errclear(void) {errno=0;}
 #endif
 /* get error text ------------------------------------------------------------*/
 static char errbuf[200];
