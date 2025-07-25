@@ -193,7 +193,7 @@ static void handle_alarm(int sig);
 #endif
 
 #define FLAG_MSG_SIZE 1024
-#define NTRIP_MINRSP 14
+#define NTRIP_MINRSP 12
 #define MAX_NTRIP_CONNECT_TIME   5000  /* 5 sec    = 5 000 ms */
 #define NTRIPv1_RSP_OK_SVR    "OK\r\n"               /* ntrip v1 response: server OK */
 #define NTRIPv2_RSP_OK_SVR    "HTTP/1.1 200 OK"      /* ntrip v2 response: server OK */
@@ -2406,6 +2406,7 @@ int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t
     uint32_t startTick = tickget();
     *msgbuf = 0;
     errclear();
+    const char *endline = (currentoutputmode == NTRIP1) ? "\r\n" : "\n\r\n";
     /* check Destination caster's response */
     while (nBufferBytes < (int)bufferSize) {
       int nread = recv(socket_tcp, &szSendBuffer[nBufferBytes],  bufferSize - nBufferBytes, 0);
@@ -2413,7 +2414,7 @@ int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t
         int err=errsock();
         if ((err!=EAGAIN) && (err!=EWOULDBLOCK)) {
           if (err==0)  {
-            if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
+            if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,endline))
                break;
             if (nBufferBytes) {
                int msglen = snprintf(msgbuf, msgbufSize, "%s connection recv disconnected by %s:%d Response: ",
@@ -2436,7 +2437,7 @@ int recv_from_caster(char *szSendBuffer, size_t bufferSize, char *msgbuf, size_t
       } // if (nread <= 0)
       nBufferBytes += nread;
       szSendBuffer[nBufferBytes] = '\0';
-      if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,"\n\r\n"))
+      if ((nBufferBytes>=NTRIP_MINRSP) && strstr(szSendBuffer,endline))
         break;
       if ((int)(tickget()-startTick)>=MAX_NTRIP_CONNECT_TIME) {
         if (nBufferBytes)
