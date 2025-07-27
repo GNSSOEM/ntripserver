@@ -37,7 +37,7 @@
  */
 
 /* SVN revision and version */
-static char revisionstr[] = "$Revision: 9812 $";
+static char revisionstr[64] = "ELT_RTKBase";
 static char datestr[] = "$Date: 2022-08-23 14:30:54 +0000 (Tue, 23 Aug 2022) $";
 
 #include <ctype.h>
@@ -321,12 +321,7 @@ int main(int argc, char **argv) {
 
   {
     char *a;
-    int i = 2;
-    strcpy(revisionstr, "1.");
-    for (a = revisionstr + 11; *a && *a != ' '; ++a)
-      revisionstr[i++] = *a;
-    revisionstr[i] = 0;
-    i = 0;
+    int i = 0;
     for (a = datestr + 7; *a && *a != ' '; ++a)
       datestr[i++] = *a;
     datestr[i] = 0;
@@ -359,7 +354,7 @@ int main(int argc, char **argv) {
   flag_create("Starting...");
 
   while ((c = getopt(argc, argv,
-      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:Q:")) != EOF) {
+      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:Q:S:")) != EOF) {
     switch (c) {
       case 'M': /*** InputMode ***/
         if (!strcmp(optarg, "serial"))
@@ -500,6 +495,9 @@ int main(int argc, char **argv) {
         break;
       case 'Q': /* event command for change state */
         eventpath = optarg;
+        break;
+      case 'S': /* event command for change state */
+        strcpy(revisionstr, optarg);
         break;
       case 'h': /* print help screen */
       case '?':
@@ -2139,6 +2137,7 @@ void usage(int rc, char *name) {
   fprintf(stderr, "                         optional\n");
   fprintf(stderr, "    -L <FlagFile>        \"No connect\" flag file\n\n");
   fprintf(stderr, "    -Q <ExecFile>        event command for change state\n\n");
+  fprintf(stderr, "    -S <Revision>        Revisiopn string\n\n");
   fprintf(stderr, "    -M <InputMode> Sets the input mode (1 = Serial Port, 2 = IP server,\n");
   fprintf(stderr, "       3 = File, 4 = SISNeT Data Server, 5 = UDP server, 6 = NTRIP1 Caster,\n");
   fprintf(stderr, "       7 = NTRIP2 Caster in HTTP mode),\n");
