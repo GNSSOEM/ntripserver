@@ -52,6 +52,7 @@ static char datestr[] = "$Date: 2022-08-23 14:30:54 +0000 (Tue, 23 Aug 2022) $";
 #include <time.h>
 #include <signal.h>
 #include <unistd.h>
+#include <limits.h>
 
 #ifdef WINDOWSVERSION
   #include <winsock2.h>
@@ -166,6 +167,7 @@ const char *nrip1Mountpoint = NULL;
 static int udp_cseq = 1;
 static int udp_tim, udp_seq, udp_init;
 const char *flagpath = "";
+const char *eventpath = "";
 const char *outhost = 0;
 unsigned int outport = 0;
 int output_v2http_chunken = 1;
@@ -235,6 +237,7 @@ static void flag_io_error(const char *msg);
 static void flag_logical_error(const char *msg);
 static void flag_str_error(const char *msg, const char *arg);
 static void flag_int_error(const char *msg, int value);
+static void eventexec(const char *msg);
 
 /*
  * main
@@ -356,7 +359,7 @@ int main(int argc, char **argv) {
   flag_create("Starting...");
 
   while ((c = getopt(argc, argv,
-      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:")) != EOF) {
+      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:Q:")) != EOF) {
     switch (c) {
       case 'M': /*** InputMode ***/
         if (!strcmp(optarg, "serial"))
@@ -494,6 +497,9 @@ int main(int argc, char **argv) {
         break;
       case 'L': /* *No connect" flag file */
         flagpath = optarg;
+        break;
+      case 'Q': /* event command for change state */
+        eventpath = optarg;
         break;
       case 'h': /* print help screen */
       case '?':
@@ -1024,6 +1030,7 @@ int main(int argc, char **argv) {
           flag_logical_error(msgbuf);
           break;
         }
+        eventexec("CONNECTING");
       } // if (currentoutputmode == TCPIP)
 
       /* connect to Destination caster, server or proxy host */
@@ -1466,10 +1473,12 @@ int main(int argc, char **argv) {
           break;
       } /* switch (outputmode) */
     } /* while ((input_init) && (output_init)) */
+    eventexec("DISCONNECT");
     close_session(casterouthost, mountpoint, session, rtsp_extension, 0);
-    if ((reconnect_sec_max || fallback) && !sigint_received)
+    if ((reconnect_sec_max || fallback) && !sigint_received) {
+      eventexec("PAUSE");
       reconnect_sec = reconnect(reconnect_sec, reconnect_sec_max);
-    else
+    } else
       inputmode = LAST;
   } /* while (inputmode != LAST) */
   return reconnect_sec_max ? SUCCESS : NET_ERROR;
@@ -1519,6 +1528,7 @@ static void send_receive_loop(sockettype sock, int outmode,
   time_t laststate = time(0);
   int firstInputRtcm3 = SKIP_MAX_NO_RTCM3_PACKETS;
 
+  eventexec("CONNECTED");
   const char *actualMountpoint = (currentoutputmode == NTRIP1) ? nrip1Mountpoint : mountpoint;
   printf("NTRIP connected to %s://%s:%d/%s\n",
          currentoutputmode == NTRIP1 ? "ntrip1" :
@@ -2128,6 +2138,7 @@ void usage(int rc, char *name) {
   fprintf(stderr, "                         attemts in seconds, default: no reconnect activated,\n");
   fprintf(stderr, "                         optional\n");
   fprintf(stderr, "    -L <FlagFile>        \"No connect\" flag file\n\n");
+  fprintf(stderr, "    -Q <ExecFile>        event command for change state\n\n");
   fprintf(stderr, "    -M <InputMode> Sets the input mode (1 = Serial Port, 2 = IP server,\n");
   fprintf(stderr, "       3 = File, 4 = SISNeT Data Server, 5 = UDP server, 6 = NTRIP1 Caster,\n");
   fprintf(stderr, "       7 = NTRIP2 Caster in HTTP mode),\n");
@@ -2524,6 +2535,33 @@ static void flag_int_error(const char *msg, int value)
   snprintf(buf, sizeof(buf), msg, value);
   buf[sizeof(buf)-1] = 0;
   flag_logical_error(buf);
+}
+/* execute event command ---------------------------------------------------------*/
+static void eventexec(const char *msg)
+{
+   if (!*eventpath) return;
+   char systempath[PATH_MAX];
+   strcpy(systempath,eventpath);
+   size_t len=strlen(systempath);
+   char *p=systempath+len;
+   *p++=' ';
+   len++;
+   *p=0;
+   char msgbuf[64];
+   size_t rest = sizeof(systempath)-len - 1;
+   size_t msglen=strlen(msg);
+   if (msglen > rest)
+      msglen = rest;
+   if (msglen > (sizeof(msgbuf)-1))
+      msglen = sizeof(msgbuf)-1;
+   if (msglen > 0) {
+      strncpy(msgbuf, msg, msglen);
+      msgbuf[sizeof(msgbuf)-1]=0;
+      strcpy(p, msgbuf);
+   }
+   //tracet(3,"eventexec: %s\n",systempath);
+   //fprintf(stderr,"systempath=%s\n",systempath);
+   system(systempath);
 }
 /********************************************************************
  * close session                                                    *
