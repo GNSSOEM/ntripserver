@@ -745,7 +745,7 @@ int main(int argc, char **argv) {
           //args.nmea ? "Ntrip-GGA: " : "", args.nmea ? args.nmea : "", args.nmea ? "\r\n" : "", // TODO: add argument
           (*stream_user || *stream_password) ? "\r\nAuthorization: Basic " : "");
           /* second check for old glibc */
-          if (nBufferBytes > (int) sizeof(szSendBuffer) - 40 || nBufferBytes < 0) {
+          if (nBufferBytes >= (int) sizeof(szSendBuffer) - 40 || nBufferBytes < 0) {
             flag_logical_error("ERROR: Source caster request too long");
             input_init = 0;
             reconnect_sec_max = 0;
@@ -753,7 +753,7 @@ int main(int argc, char **argv) {
           }
           nBufferBytes += encode(szSendBuffer + nBufferBytes, sizeof(szSendBuffer) - nBufferBytes - 4,
                                  stream_user, stream_password);
-          if (nBufferBytes > (int) sizeof(szSendBuffer) - 4) {
+          if (nBufferBytes >= (int) sizeof(szSendBuffer) - 4) {
             flag_logical_error("ERROR: Source caster user ID and/or password too long");
             input_init = 0;
             reconnect_sec_max = 0;
@@ -1170,7 +1170,7 @@ int main(int argc, char **argv) {
               "SOURCE %s %s\r\nSource-Agent: %s/%s\r\nSTR: \r\n\r\n",
               password, nrip1Mountpoint,
               AGENTSTRING, revisionstr);
-          if ((nBufferBytes > (int) sizeof(szSendBuffer))
+          if ((nBufferBytes >= (int) sizeof(szSendBuffer))
               || (nBufferBytes < 0)) {
             flag_logical_error("ERROR: Destination caster request to long");
             reconnect_sec_max = 0;
@@ -1239,7 +1239,7 @@ int main(int argc, char **argv) {
               mountpoint, casterouthost, AGENTSTRING, revisionstr,
               authorization, ntrip_str ? "\r\nNtrip-STR: " : "", ntrip_str,
               output_v2http_chunken ? "Transfer-Encoding: chunked\r\n" : "");
-          if ((nBufferBytes > (int) sizeof(szSendBuffer))
+          if ((nBufferBytes >= (int) sizeof(szSendBuffer))
               || (nBufferBytes < 0)) {
             flag_logical_error("ERROR: Destination caster request to long");
             reconnect_sec_max = 0;
@@ -1346,7 +1346,7 @@ int main(int argc, char **argv) {
               rtsp_extension, mountpoint, udp_cseq++, AGENTSTRING, revisionstr,
               client_port, authorization, ntrip_str ? "\r\nNtrip-STR: " : "",
               ntrip_str);
-          if ((nBufferBytes > (int) sizeof(szSendBuffer))
+          if ((nBufferBytes >= (int) sizeof(szSendBuffer))
               || (nBufferBytes < 0)) {
             flag_logical_error("ERROR: Destination caster request to long");
             reconnect_sec_max = 0;
