@@ -529,9 +529,18 @@ int main(int argc, char **argv) {
     reconnect_sec_max = 256;
   }
 
-  if (!mountpoint && outputmode != TCPIP) {
-    flag_logical_error("ERROR: Missing mountpoint argument for stream upload");
-    exit(CMD_KEY_ERROR);
+  if (outputmode != TCPIP) {
+    if ((outputmode == NTRIP1) && strstr(casterouthost,"onocoy.com")) {
+       if (!user) {
+          flag_logical_error("ERROR: Missing user argument for stream upload");
+          exit(CMD_KEY_ERROR);
+       }
+    } else {
+       if (!mountpoint) {
+          flag_logical_error("ERROR: Missing mountpoint argument for stream upload");
+          exit(CMD_KEY_ERROR);
+       }
+    }
   }
   if (outputmode == TCPIP) {
     mountpoint = NULL;
