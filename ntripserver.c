@@ -80,6 +80,7 @@ typedef int sockettype;
 #endif
 
 #define ALARMTIME (2*60)
+#define ALARMTIME2 5
 
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0 /* prevent compiler errors */
@@ -2235,8 +2236,13 @@ static void handle_alarm(int sig)
 #endif /* __GNUC__ */
 {
   if (!in_reconnect_pause) {
+     if (sigalarm_received) {
+        flag_int_error("EXIT via more than %d seconds no activity", ALARMTIME+ALARMTIME2);
+        abort();
+     }
      sigalarm_received = 1;
      flag_int_error("ERROR: more than %d seconds no activity", ALARMTIME);
+     alarm(ALARMTIME2);
   };
 }
 
