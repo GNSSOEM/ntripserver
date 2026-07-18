@@ -355,7 +355,7 @@ int main(int argc, char **argv) {
   flag_create("Starting...");
 
   while ((c = getopt(argc, argv,
-      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:Q:S:")) != EOF) {
+      "M:i:h:b:p:s:a:m:c:H:P:f:x:y:l:u:V:D:U:W:O:E:F:R:N:n:BL:Q:S:C")) != EOF) {
     switch (c) {
       case 'M': /*** InputMode ***/
         if (!strcmp(optarg, "serial"))
@@ -384,6 +384,9 @@ int main(int argc, char **argv) {
         break;
       case 'B': /* bind to incoming UDP stream */
         bindmode = 1;
+        break;
+      case 'C': /* not use chunken mode */
+        output_v2http_chunken = 0;
         break;
       case 'V': /* Sisnet data server version number */
         if (!strcmp("3.0", optarg))
@@ -2210,6 +2213,7 @@ void usage(int rc, char *name) {
   fprintf(stderr, "                         only for NTRIP Version 2.0 destination casters, mandatory\n");
   fprintf(stderr, "       -c <DestPass>     Destination caster password for stream upload to mountpoint,\n");
   fprintf(stderr, "                         only for NTRIP destination casters, mandatory\n");
+  fprintf(stderr, "       -C                Not use chunken mode\n");
   fprintf(stderr, "       -N <STR-record>   Sourcetable STR-record\n");
   fprintf(stderr, "                         optional for NTRIP Version 2.0 in RTSP/RTP and TCP/IP mode\n\n");
   exit(rc);
