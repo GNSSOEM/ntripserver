@@ -81,6 +81,7 @@ typedef int sockettype;
 
 #define ALARMTIME (2*60)
 #define ALARMTIME2 5
+#define ALARMTIME_CONNECT 15
 
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0 /* prevent compiler errors */
@@ -156,6 +157,7 @@ static int sigpipe_received = 0;
   HANDLE gps_serial = INVALID_HANDLE_VALUE;
 #endif
 static int in_reconnect_pause = 0;
+static int in_connecting = 0;
 static int sigalarm_received = 0;
 static int sigint_received = 0;
 static int reconnect_sec = 1;
@@ -1035,10 +1037,19 @@ int main(int argc, char **argv) {
         }
       } // if (currentoutputmode == TCPIP)
       else {
-        if (connect(socket_tcp, (struct sockaddr*) &caster, sizeof(caster)) < 0) {
-          snprintf(msgbuf, sizeof(msgbuf), "WARNING: can't connect output to %s at port %d",
-                   inet_ntoa(caster.sin_addr), outport);
+        in_connecting = 1;
+        alarm(ALARMTIME_CONNECT);
+        int connectres = connect(socket_tcp, (struct sockaddr*) &caster, sizeof(caster));
+        alarm(ALARMTIME);
+        in_connecting = 0;
+        sigalarm_received = 0;
+        sigpipe_received = 0;
+        if (connectres < 0) {
+          int err = errsock();
+          snprintf(msgbuf, sizeof(msgbuf), "WARNING: connect error %d (%s) to %s:%d",
+                   err, errorstring(err), inet_ntoa(caster.sin_addr), outport);
           flag_logical_error(msgbuf);
+          in_connecting = 0;
           break;
         }
         eventexec("CONNECTING");
@@ -2239,7 +2250,7 @@ static void handle_alarm(int sig __attribute__((__unused__)))
 static void handle_alarm(int sig)
 #endif /* __GNUC__ */
 {
-  if (!in_reconnect_pause) {
+  if (!in_reconnect_pause && !in_connecting) {
      if (sigalarm_received) {
         flag_int_error("EXIT via more than %d seconds no activity", ALARMTIME+ALARMTIME2);
         abort();
